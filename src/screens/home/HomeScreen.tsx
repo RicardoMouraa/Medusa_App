@@ -7,7 +7,7 @@ import {
   Text,
   View
 } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 
 import BalanceSummaryCard from '@/components/BalanceSummaryCard';
 import Card from '@/components/Card';
@@ -27,12 +27,12 @@ import { formatCurrencyBRL, formatPercentage } from '@/utils/format';
 type MethodMeta = {
   label: string;
   icon: string;
-  iconSet?: 'ion' | 'material';
+  iconSet?: 'ion' | 'materialCommunity' | 'materialIcons';
 };
 
 const METHOD_LABELS: Record<string, MethodMeta> = {
   creditCard: { label: 'Cartão de Crédito', icon: 'card-outline', iconSet: 'ion' },
-  pix: { label: 'Pix', icon: 'pix', iconSet: 'material' },
+  pix: { label: 'Pix', icon: 'pix', iconSet: 'materialIcons' },
   boleto: { label: 'Boleto', icon: 'document-text-outline', iconSet: 'ion' }
 };
 
@@ -40,7 +40,16 @@ const getMethodMeta = (method: string): MethodMeta =>
   METHOD_LABELS[method] ?? { label: method, icon: 'stats-chart-outline', iconSet: 'ion' };
 
 const renderMethodIcon = (meta: MethodMeta, color: string) => {
-  if (meta.iconSet === 'material') {
+  if (meta.iconSet === 'materialIcons') {
+    return (
+      <MaterialIcons
+        name={meta.icon as keyof typeof MaterialIcons.glyphMap}
+        size={20}
+        color={color}
+      />
+    );
+  }
+  if (meta.iconSet === 'materialCommunity') {
     return (
       <MaterialCommunityIcons
         name={meta.icon as keyof typeof MaterialCommunityIcons.glyphMap}
