@@ -1,9 +1,8 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 import Card from '@/components/Card';
-import PrimaryButton from '@/components/PrimaryButton';
-import { usePreferences } from '@/context/PreferencesContext';
 import { formatCurrencyBRL } from '@/utils/format';
 
 type BalanceSummaryCardProps = {
@@ -18,46 +17,51 @@ const BalanceSummaryCard: React.FC<BalanceSummaryCardProps> = ({
   pending,
   currency = 'BRL',
   onWithdrawPress
-}) => {
-  const { theme } = usePreferences();
-
-  return (
-    <Card style={[styles.container, { backgroundColor: theme.colors.card }]}>
-      <View style={styles.header}>
-        <Text style={[styles.subtitle, { color: theme.colors.textMuted }]}>Saldo disponível</Text>
-        <Text style={[styles.value, { color: theme.colors.text }]}>{formatCurrencyBRL(available)}</Text>
+}) => (
+  <Card style={styles.container}>
+    <View style={styles.header}>
+      <Text style={styles.subtitle}>Saldo disponível</Text>
+      <Text style={styles.value}>{formatCurrencyBRL(available)}</Text>
+    </View>
+    <View style={styles.row}>
+      <View>
+        <Text style={styles.caption}>Pendente</Text>
+        <Text style={styles.pending}>{formatCurrencyBRL(pending)}</Text>
       </View>
-      <View style={styles.row}>
-        <View>
-          <Text style={[styles.caption, { color: theme.colors.textSecondary }]}>Saldo pendente</Text>
-          <Text style={[styles.pending, { color: theme.colors.text }]}>{formatCurrencyBRL(pending)}</Text>
-        </View>
-        <PrimaryButton label="Sacar agora" onPress={onWithdrawPress} style={styles.button} />
-      </View>
-    </Card>
-  );
-};
+      <TouchableOpacity style={styles.button} onPress={onWithdrawPress} activeOpacity={0.85}>
+        <Text style={styles.buttonLabel}>Saque agora</Text>
+        <Ionicons name="chevron-forward" size={18} color="#FFFFFF" />
+      </TouchableOpacity>
+    </View>
+  </Card>
+);
 
 const styles = StyleSheet.create({
   container: {
-    padding: 20,
-    gap: 20
+    padding: 22,
+    gap: 20,
+    borderRadius: 24,
+    overflow: 'hidden',
+    backgroundColor: '#D8F6D0'
   },
   header: {
     gap: 6
   },
   subtitle: {
     fontSize: 14,
-    fontWeight: '600'
+    fontWeight: '600',
+    color: '#032B0B'
   },
   value: {
     fontSize: 32,
     fontWeight: '800',
-    letterSpacing: -0.5
+    letterSpacing: -0.5,
+    color: '#032B0B'
   },
   caption: {
     fontSize: 13,
-    fontWeight: '500'
+    fontWeight: '500',
+    color: '#06421B'
   },
   row: {
     flexDirection: 'row',
@@ -66,10 +70,23 @@ const styles = StyleSheet.create({
   },
   pending: {
     fontSize: 18,
-    fontWeight: '700'
+    fontWeight: '700',
+    color: '#032B0B'
   },
   button: {
-    width: 150
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#05A660',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 30,
+    gap: 6
+  },
+  buttonLabel: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 14
   }
 });
 

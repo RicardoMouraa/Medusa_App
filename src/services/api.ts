@@ -82,7 +82,8 @@ const DASHBOARD_BY_PERIOD: Record<PeriodFilter, DashboardSummary> = {
       pix: 632000,
       boleto: 118020
     }
-  }
+  },
+  custom: DEFAULT_DASHBOARD
 };
 
 const mockOrders: OrderDetail[] = [

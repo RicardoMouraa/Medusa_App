@@ -1,4 +1,4 @@
-export type PeriodFilter = 'today' | '7d' | '30d' | '90d' | '1y';
+export type PeriodFilter = 'today' | '7d' | '30d' | '90d' | '1y' | 'custom';
 
 export interface AuthResponse {
   token: string;

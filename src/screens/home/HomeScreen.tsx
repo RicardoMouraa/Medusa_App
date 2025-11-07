@@ -7,6 +7,7 @@ import {
   Text,
   View
 } from 'react-native';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 
 import BalanceSummaryCard from '@/components/BalanceSummaryCard';
 import Card from '@/components/Card';
@@ -23,17 +24,55 @@ import { getDashboard } from '@/services/api';
 import { DashboardSummary, PeriodFilter as PeriodFilterValue } from '@/types/api';
 import { formatCurrencyBRL, formatPercentage } from '@/utils/format';
 
+type MethodMeta = {
+  label: string;
+  icon: string;
+  iconSet?: 'ion' | 'material';
+};
+
+const METHOD_LABELS: Record<string, MethodMeta> = {
+  creditCard: { label: 'Cartão de Crédito', icon: 'card-outline', iconSet: 'ion' },
+  pix: { label: 'Pix', icon: 'pix', iconSet: 'material' },
+  boleto: { label: 'Boleto', icon: 'document-text-outline', iconSet: 'ion' }
+};
+
+const getMethodMeta = (method: string): MethodMeta =>
+  METHOD_LABELS[method] ?? { label: method, icon: 'stats-chart-outline', iconSet: 'ion' };
+
+const renderMethodIcon = (meta: MethodMeta, color: string) => {
+  if (meta.iconSet === 'material') {
+    return (
+      <MaterialCommunityIcons
+        name={meta.icon as keyof typeof MaterialCommunityIcons.glyphMap}
+        size={20}
+        color={color}
+      />
+    );
+  }
+  return (
+    <Ionicons
+      name={meta.icon as keyof typeof Ionicons.glyphMap}
+      size={18}
+      color={color}
+    />
+  );
+};
+
 const HomeScreen: React.FC = ({ navigation }: any) => {
   const { theme } = usePreferences();
   const { showToast } = useToast();
   const [period, setPeriod] = useState<PeriodFilterValue>('today');
+  const [customRange, setCustomRange] = useState<{ start: Date; end: Date } | null>(null);
+  const customRangeKey = customRange
+    ? `${customRange.start.toISOString()}_${customRange.end.toISOString()}`
+    : 'none';
 
   const {
     data,
     isLoading,
     error,
     refetch
-  } = useApiRequest<DashboardSummary>(() => getDashboard(period), [period]);
+  } = useApiRequest<DashboardSummary>(() => getDashboard(period), [period, customRangeKey]);
 
   const handleFinanceShortcut = useCallback(() => {
     navigation.navigate('FinanceTab');
@@ -44,9 +83,7 @@ const HomeScreen: React.FC = ({ navigation }: any) => {
   }, [refetch]);
 
   const salesDistribution = useMemo(() => {
-    if (!data) {
-      return [];
-    }
+    if (!data) return [];
     const totals = data.salesByMethod ?? {};
     const sum = Object.values(totals).reduce((acc, value) => acc + value, 0);
     if (sum === 0) return [];
@@ -95,7 +132,15 @@ const HomeScreen: React.FC = ({ navigation }: any) => {
 
             <View style={styles.section}>
               <SectionTitle title="Período" caption="Filtre seus indicadores" />
-              <PeriodSelector value={period} onChange={setPeriod} />
+              <PeriodSelector
+                value={period}
+                onChange={setPeriod}
+                customRange={customRange}
+                onCustomRangeChange={setCustomRange}
+              />
+              <Text style={[styles.scrollHint, { color: theme.colors.textSecondary }]}>
+                Deslize para ver mais opções →
+              </Text>
             </View>
 
             <View style={styles.statsRow}>
@@ -133,29 +178,33 @@ const HomeScreen: React.FC = ({ navigation }: any) => {
                     icon="pie-chart-outline"
                   />
                 ) : (
-                  salesDistribution.map((item) => (
-                    <View key={item.method} style={styles.methodRow}>
-                      <View style={styles.methodHeader}>
-                        <Text style={[styles.methodLabel, { color: theme.colors.text }]}>
-                          {item.method.replace('_', ' ')}
-                        </Text>
-                        <Text style={[styles.methodValue, { color: theme.colors.text }]}>
-                          {formatPercentage(item.percentage)}
-                        </Text>
+                  salesDistribution.map((item) => {
+                    const meta = getMethodMeta(item.method);
+                    return (
+                      <View key={item.method} style={styles.methodRow}>
+                        <View style={styles.methodHeader}>
+                          <View style={styles.methodInfo}>
+                            {renderMethodIcon(meta, theme.colors.primary)}
+                            <Text style={[styles.methodLabel, { color: theme.colors.text }]}>{meta.label}</Text>
+                          </View>
+                          <Text style={[styles.methodValue, { color: theme.colors.text }]}>
+                            {formatPercentage(item.percentage)}
+                          </Text>
+                        </View>
+                        <View style={[styles.progressTrack, { backgroundColor: theme.colors.border }]}>
+                          <View
+                            style={[
+                              styles.progressIndicator,
+                              {
+                                width: `${item.percentage * 100}%`,
+                                backgroundColor: theme.colors.primary
+                              }
+                            ]}
+                          />
+                        </View>
                       </View>
-                      <View style={[styles.progressTrack, { backgroundColor: theme.colors.border }]}>
-                        <View
-                          style={[
-                            styles.progressIndicator,
-                            {
-                              width: `${item.percentage * 100}%`,
-                              backgroundColor: theme.colors.primary
-                            }
-                          ]}
-                        />
-                      </View>
-                    </View>
-                  ))
+                    );
+                  })
                 )}
               </Card>
             </View>
@@ -163,9 +212,7 @@ const HomeScreen: React.FC = ({ navigation }: any) => {
         ) : isLoading ? (
           <View style={styles.loading}>
             <ActivityIndicator size="large" color={theme.colors.primary} />
-            <Text style={[styles.loadingText, { color: theme.colors.textMuted }]}>
-              Carregando dashboard...
-            </Text>
+            <Text style={[styles.loadingText, { color: theme.colors.textMuted }]}>Carregando dashboard...</Text>
           </View>
         ) : (
           <EmptyState />
@@ -194,6 +241,10 @@ const styles = StyleSheet.create({
   section: {
     gap: 16
   },
+  scrollHint: {
+    fontSize: 12,
+    fontWeight: '600'
+  },
   statsRow: {
     flexDirection: 'row',
     gap: 16
@@ -207,10 +258,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 8
   },
+  methodInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8
+  },
   methodLabel: {
     fontSize: 15,
-    fontWeight: '600',
-    textTransform: 'capitalize'
+    fontWeight: '600'
   },
   methodValue: {
     fontSize: 15,

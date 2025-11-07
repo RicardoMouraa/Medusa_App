@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -18,8 +18,10 @@ type MedusaHeaderProps = {
   children?: React.ReactNode;
 };
 
+const logoSource = require('../../assets/logo-horizontal-branca.png');
+
 const MedusaHeader: React.FC<MedusaHeaderProps> = ({
-  title = 'MedusaPay',
+  title,
   subtitle,
   actions = [],
   children
@@ -30,12 +32,18 @@ const MedusaHeader: React.FC<MedusaHeaderProps> = ({
   return (
     <View style={[styles.wrapper, { backgroundColor: theme.colors.headerBackground }]}>
       <SafeAreaView edges={['top', 'left', 'right']}>
-        <View style={[styles.container, { paddingTop: insets.top ? 8 : 12 }]}>
+        <View style={[styles.container, { paddingTop: insets.top ? 18 : 24 }]}>
           <View style={styles.brandRow}>
-            <Text style={[styles.title, { color: theme.colors.headerTint }]}>{title}</Text>
-            {subtitle ? (
-              <Text style={[styles.subtitle, { color: theme.colors.textMuted }]}>{subtitle}</Text>
-            ) : null}
+            {title ? (
+              <>
+                <Text style={[styles.title, { color: theme.colors.headerTint }]}>{title}</Text>
+                {subtitle ? (
+                  <Text style={[styles.subtitle, { color: theme.colors.textMuted }]}>{subtitle}</Text>
+                ) : null}
+              </>
+            ) : (
+              <Image source={logoSource} style={styles.logo} resizeMode="contain" />
+            )}
           </View>
           <View style={styles.actionsRow}>
             {actions.map((action, index) => (
@@ -76,11 +84,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingBottom: 16,
-    paddingTop: 12
+    paddingBottom: 22,
+    paddingTop: 20
   },
   brandRow: {
     flex: 1
+  },
+  logo: {
+    width: 240,
+    height: 60,
+    maxWidth: '90%',
+    alignSelf: 'flex-start'
   },
   title: {
     fontSize: 24,
