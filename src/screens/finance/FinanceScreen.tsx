@@ -13,15 +13,12 @@ import MedusaHeader from '@/components/MedusaHeader';
 import PrimaryButton from '@/components/PrimaryButton';
 import SectionTitle from '@/components/SectionTitle';
 import TextField from '@/components/TextField';
+import { useAuth } from '@/context/AuthContext';
 import { usePreferences } from '@/context/PreferencesContext';
 import { useApiRequest } from '@/hooks/useApiRequest';
 import { useToast } from '@/hooks/useToast';
-import {
-  getBalance,
-  requestWithdraw,
-  ApiError
-} from '@/services/api';
-import { BalanceResponse, WithdrawRequestPayload } from '@/types/api';
+import { getBalance, createTransfer } from '@/services/medusaApi';
+import { ApiError, BalanceResponse, WithdrawRequestPayload } from '@/types/api';
 import { formatCurrencyBRL } from '@/utils/format';
 import { maskCurrency, parseCurrencyToNumber } from '@/utils/validation';
 
@@ -36,6 +33,7 @@ const PIX_KEY_TYPES = [
 
 const FinanceScreen: React.FC = ({ navigation }: any) => {
   const { theme } = usePreferences();
+  const { profile } = useAuth();
   const { showToast } = useToast();
 
   const [selectedType, setSelectedType] = useState<(typeof PIX_KEY_TYPES)[number]>('CPF');
@@ -43,10 +41,14 @@ const FinanceScreen: React.FC = ({ navigation }: any) => {
   const [withdrawValue, setWithdrawValue] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const { data: balance, isLoading, error, refetch } = useApiRequest<BalanceResponse>(
-    () => getBalance(),
-    []
+  const secretKey = profile?.secretKey;
+
+  const fetchBalance = useCallback(
+    () => (secretKey ? getBalance(secretKey) : Promise.reject(new Error('Secret Key nao configurada.'))),
+    [secretKey]
   );
+
+  const { data: balance, isLoading, error, refetch } = useApiRequest<BalanceResponse>(fetchBalance, [fetchBalance]);
 
   const fee = balance?.withdrawFee ?? 0;
   const available = balance?.available ?? 0;
@@ -101,30 +103,38 @@ const FinanceScreen: React.FC = ({ navigation }: any) => {
     };
   }, [pixKey, selectedType, withdrawValue]);
 
-  const handleSubmit = useCallback(async () => {
-    if (!validate()) return;
-    try {
-      setIsSubmitting(true);
-      await requestWithdraw(payload);
-      showToast({
-        type: 'success',
-        text1: 'Solicitação enviada',
-        text2: 'Acompanhe o status na aba de histórico.'
-      });
-      setPixKey('');
-      setWithdrawValue('');
-      await refetch();
-    } catch (err) {
-      const apiError = err as ApiError;
-      showToast({
-        type: 'error',
-        text1: 'Erro ao solicitar saque',
-        text2: apiError.message
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
-  }, [payload, refetch, showToast, validate]);
+  const handleSubmit = useCallback(async () => {
+    if (!validate()) return;
+    try {
+      setIsSubmitting(true);
+      if (!secretKey) {
+        throw new Error('Secret Key nao configurada.');
+      }
+      const amountInCents = Math.round(payload.amount * 100);
+      await createTransfer(secretKey, {
+        amount: amountInCents,
+        pixKey
+      });
+      showToast({
+        type: 'success',
+        text1: 'Transferencia criada',
+        text2: 'Acompanhe o status na aba de historico.'
+      });
+      setPixKey('');
+      setWithdrawValue('');
+      await refetch();
+    } catch (err) {
+      const apiError = err as ApiError;
+      showToast({
+        type: 'error',
+        text1: 'Erro ao solicitar saque',
+        text2: apiError.message
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [payload, pixKey, refetch, secretKey, showToast, validate]);
+
 
   const handleHistoryPress = useCallback(() => {
     navigation.navigate('WithdrawHistory');

@@ -13,10 +13,11 @@ import { Ionicons } from '@expo/vector-icons';
 import EmptyState from '@/components/EmptyState';
 import PrimaryButton from '@/components/PrimaryButton';
 import WithdrawHistoryListItem from '@/components/WithdrawHistoryItem';
+import { useAuth } from '@/context/AuthContext';
 import { usePreferences } from '@/context/PreferencesContext';
 import { useApiRequest } from '@/hooks/useApiRequest';
 import { useToast } from '@/hooks/useToast';
-import { getWithdrawHistory } from '@/services/api';
+import { getTransfers } from '@/services/medusaApi';
 import { WithdrawHistoryItem } from '@/types/api';
 
 type WithdrawHistoryScreenProps = {
@@ -25,12 +26,16 @@ type WithdrawHistoryScreenProps = {
 
 const WithdrawHistoryScreen: React.FC<WithdrawHistoryScreenProps> = ({ navigation }) => {
   const { theme } = usePreferences();
+  const { profile } = useAuth();
   const { showToast } = useToast();
+  const secretKey = profile?.secretKey;
 
-  const { data, isLoading, error, refetch } = useApiRequest<WithdrawHistoryItem[]>(async () => {
-    const response = await getWithdrawHistory();
-    return response.items ?? [];
-  }, []);
+  const fetchHistory = useCallback(
+    () => (secretKey ? getTransfers(secretKey) : Promise.reject(new Error('Secret Key nao configurada.'))),
+    [secretKey]
+  );
+
+  const { data, isLoading, error, refetch } = useApiRequest<WithdrawHistoryItem[]>(fetchHistory, [fetchHistory]);
 
   const handleGoBack = useCallback(() => {
     navigation.goBack();

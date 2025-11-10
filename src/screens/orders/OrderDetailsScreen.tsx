@@ -5,10 +5,11 @@ import { Ionicons } from '@expo/vector-icons';
 import Card from '@/components/Card';
 import SectionTitle from '@/components/SectionTitle';
 import StatusBadge from '@/components/StatusBadge';
+import { useAuth } from '@/context/AuthContext';
 import { usePreferences } from '@/context/PreferencesContext';
 import { useApiRequest } from '@/hooks/useApiRequest';
 import { useToast } from '@/hooks/useToast';
-import { getOrderById } from '@/services/api';
+import { getTransactionById } from '@/services/medusaApi';
 import { OrderDetail } from '@/types/api';
 import { formatCurrencyBRL, formatDayAndTime } from '@/utils/format';
 
@@ -23,12 +24,14 @@ type OrderDetailsScreenProps = {
 
 const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({ route, navigation }) => {
   const { theme } = usePreferences();
+  const { profile } = useAuth();
   const { showToast } = useToast();
   const { orderId } = route.params;
+  const secretKey = profile?.secretKey;
 
   const { data, isLoading, error, refetch } = useApiRequest<OrderDetail>(
-    () => getOrderById(orderId),
-    [orderId]
+    () => (secretKey ? getTransactionById(secretKey, orderId) : Promise.reject(new Error('Secret Key nao configurada.'))),
+    [orderId, secretKey]
   );
 
   const handleGoBack = useCallback(() => {

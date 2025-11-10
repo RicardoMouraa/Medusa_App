@@ -17,10 +17,11 @@ import PeriodSelector from '@/components/PeriodFilter';
 import PrimaryButton from '@/components/PrimaryButton';
 import SectionTitle from '@/components/SectionTitle';
 import StatCard from '@/components/StatCard';
+import { useAuth } from '@/context/AuthContext';
 import { usePreferences } from '@/context/PreferencesContext';
 import { useApiRequest } from '@/hooks/useApiRequest';
 import { useToast } from '@/hooks/useToast';
-import { getDashboard } from '@/services/api';
+import { getBalance, getTransactions } from '@/services/medusaApi';
 import { DashboardSummary, PeriodFilter as PeriodFilterValue } from '@/types/api';
 import { formatCurrencyBRL, formatPercentage } from '@/utils/format';
 
@@ -67,21 +68,99 @@ const renderMethodIcon = (meta: MethodMeta, color: string) => {
   );
 };
 
+const PERIOD_TO_DAYS: Record<Exclude<PeriodFilterValue, 'custom'>, number | 'today'> = {
+  today: 'today',
+  '7d': 7,
+  '30d': 30,
+  '90d': 90,
+  '1y': 365
+};
+
+const resolveRange = (
+  period: PeriodFilterValue,
+  customRange: { start: Date; end: Date } | null
+): { start: Date; end: Date } | null => {
+  if (period === 'custom') {
+    return customRange;
+  }
+
+  const value = PERIOD_TO_DAYS[period as Exclude<PeriodFilterValue, 'custom'>];
+  const end = new Date();
+  const start = new Date();
+  if (value === 'today') {
+    start.setHours(0, 0, 0, 0);
+    end.setHours(23, 59, 59, 999);
+    return { start, end };
+  }
+  start.setDate(start.getDate() - (value ?? 0));
+  return { start, end };
+};
+
+const normalizeMethodKey = (method?: string) => {
+  if (!method) return 'outros';
+  const normalized = method.toLowerCase();
+  if (normalized.includes('credit')) return 'creditCard';
+  if (normalized.includes('boleto')) return 'boleto';
+  if (normalized.includes('pix')) return 'pix';
+  return normalized.replace(/\s+/g, '');
+};
+
+const isWithinRange = (dateValue: string | undefined, range: { start: Date; end: Date } | null) => {
+  if (!range || !dateValue) return true;
+  const date = new Date(dateValue);
+  return date >= range.start && date <= range.end;
+};
+
 const HomeScreen: React.FC = ({ navigation }: any) => {
   const { theme } = usePreferences();
+  const { profile } = useAuth();
   const { showToast } = useToast();
   const [period, setPeriod] = useState<PeriodFilterValue>('today');
   const [customRange, setCustomRange] = useState<{ start: Date; end: Date } | null>(null);
-  const customRangeKey = customRange
-    ? `${customRange.start.toISOString()}_${customRange.end.toISOString()}`
-    : 'none';
+
+  const secretKey = profile?.secretKey;
+
+  const fetchDashboard = useCallback(async () => {
+    if (!secretKey) {
+      throw new Error('Secret Key nao configurada.');
+    }
+    const [balance, transactions] = await Promise.all([
+      getBalance(secretKey),
+      getTransactions(secretKey, { status: 'paid' })
+    ]);
+
+    const range = resolveRange(period, customRange);
+    const filtered = transactions.filter((transaction) => isWithinRange(transaction.createdAt, range));
+
+    const totalPaidAmount = filtered.reduce((sum, transaction) => sum + transaction.amount, 0);
+    const paidOrdersCount = filtered.length;
+    const averageTicket = paidOrdersCount ? totalPaidAmount / paidOrdersCount : 0;
+    const salesByMethod = filtered.reduce<DashboardSummary['salesByMethod']>(
+      (acc, transaction) => {
+        const key = normalizeMethodKey(transaction.paymentMethod);
+        acc[key] = (acc[key] ?? 0) + transaction.amount;
+        return acc;
+      },
+      { creditCard: 0, pix: 0, boleto: 0 }
+    );
+
+    return {
+      currency: balance.currency,
+      availableBalance: balance.available,
+      pendingBalance: balance.pending ?? 0,
+      totalPaidAmount,
+      paidOrdersCount,
+      averageTicket,
+      salesByMethod
+    } satisfies DashboardSummary;
+  }, [customRange, period, secretKey]);
 
   const {
     data,
     isLoading,
     error,
     refetch
-  } = useApiRequest<DashboardSummary>(() => getDashboard(period), [period, customRangeKey]);
+  } = useApiRequest<DashboardSummary>(fetchDashboard, [fetchDashboard]);
 
   const handleFinanceShortcut = useCallback(() => {
     navigation.navigate('FinanceTab');

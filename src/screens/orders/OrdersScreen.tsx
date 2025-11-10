@@ -14,10 +14,11 @@ import OrderListItem from '@/components/OrderListItem';
 import PeriodSelector from '@/components/PeriodFilter';
 import PrimaryButton from '@/components/PrimaryButton';
 import SectionTitle from '@/components/SectionTitle';
+import { useAuth } from '@/context/AuthContext';
 import { usePreferences } from '@/context/PreferencesContext';
 import { useApiRequest } from '@/hooks/useApiRequest';
 import { useToast } from '@/hooks/useToast';
-import { getOrders } from '@/services/api';
+import { getTransactions } from '@/services/medusaApi';
 import { OrderSummary } from '@/types/api';
 
 const STATUS_OPTIONS = [
@@ -29,18 +30,34 @@ const STATUS_OPTIONS = [
 
 const OrdersScreen: React.FC = ({ navigation }: any) => {
   const { theme } = usePreferences();
+  const { profile } = useAuth();
   const { showToast } = useToast();
   const [status, setStatus] = useState<(typeof STATUS_OPTIONS)[number]['value']>('all');
 
-  const fetchOrders = useCallback(
-    () =>
-      getOrders({
-        status: status === 'all' ? undefined : status
-      }).then((response) => response.data),
-    [status]
+  const secretKey = profile?.secretKey;
+
+  const mapStatusFilter = useCallback(
+    (value: (typeof STATUS_OPTIONS)[number]['value']) => {
+      if (value === 'all') return undefined;
+      if (value === 'pending') return 'waiting_payment,processing';
+      if (value === 'paid') return 'paid';
+      if (value === 'canceled') return 'canceled';
+      return value;
+    },
+    []
   );
 
-  const { data, isLoading, error, refetch } = useApiRequest<OrderSummary[]>(fetchOrders, [status]);
+  const fetchOrders = useCallback(
+    () =>
+      secretKey
+        ? getTransactions(secretKey, {
+            status: mapStatusFilter(status)
+          })
+        : Promise.reject(new Error('Secret Key nao configurada.')),
+    [mapStatusFilter, secretKey, status]
+  );
+
+  const { data, isLoading, error, refetch } = useApiRequest<OrderSummary[]>(fetchOrders, [fetchOrders]);
 
   const handleOrderPress = useCallback(
     (order: OrderSummary) => {

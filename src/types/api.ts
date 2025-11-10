@@ -1,5 +1,11 @@
 export type PeriodFilter = 'today' | '7d' | '30d' | '90d' | '1y' | 'custom';
 
+export type ApiError = {
+  message: string;
+  status?: number;
+  details?: unknown;
+};
+
 export interface AuthResponse {
   token: string;
   refreshToken?: string;

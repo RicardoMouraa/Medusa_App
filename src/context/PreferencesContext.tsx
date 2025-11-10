@@ -10,11 +10,8 @@ import React, {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { STORAGE_KEYS } from '@/constants/storageKeys';
-import {
-  getUserSettings,
-  updateUserSettings,
-  ApiError
-} from '@/services/api';
+import { getUserSettings, updateUserSettings } from '@/services/preferences';
+import { ApiError } from '@/types/api';
 import {
   registerForPushNotificationsAsync,
   updateNotificationPreferences

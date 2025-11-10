@@ -1,5 +1,7 @@
 export type RootStackParamList = {
   App: undefined;
+  Auth: undefined;
+  SecretKey: undefined;
 };
 
 export type OrdersStackParamList = {
@@ -21,4 +23,10 @@ export type AppTabParamList = {
   OrdersTab: undefined;
   FinanceTab: undefined;
   SettingsTab: undefined;
+};
+
+export type AuthStackParamList = {
+  Login: undefined;
+  Register: undefined;
+  ForgotPassword: undefined;
 };

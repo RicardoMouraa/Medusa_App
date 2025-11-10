@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 
-import { ApiError } from '@/services/api';
+import { ApiError } from '@/types/api';
 
 type UseApiRequestOptions<T> = {
   immediate?: boolean;
