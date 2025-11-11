@@ -14,6 +14,7 @@ import {
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
+  updateEmail,
   updateProfile
 } from 'firebase/auth';
 import {
@@ -32,6 +33,8 @@ type FirestoreUserDoc = {
   name: string;
   email: string;
   secretKey: string | null;
+  phone?: string | null;
+  recipientId?: string | null;
   createdAt?: Timestamp | string | null;
   updatedAt?: Timestamp | string | null;
 };
@@ -41,6 +44,8 @@ export type AuthUserProfile = {
   name: string;
   email: string;
   secretKey: string | null;
+  phone?: string | null;
+  recipientId?: string | null;
   createdAt?: string | null;
   updatedAt?: string | null;
 };
@@ -55,11 +60,13 @@ type AuthContextValue = {
   user: User | null;
   profile: AuthUserProfile | null;
   isInitializing: boolean;
+  isProfileReady: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (payload: SignUpPayload) => Promise<void>;
   signOut: () => Promise<void>;
   requestPasswordReset: (email: string) => Promise<void>;
-  saveSecretKey: (secretKey: string) => Promise<void>;
+  saveSecretKey: (secretKey: string, recipientId?: string | null) => Promise<void>;
+  updateProfileDetails: (payload: { name?: string; email?: string; phone?: string }) => Promise<void>;
   refreshProfile: () => Promise<void>;
 };
 
@@ -80,6 +87,8 @@ const normalizeProfile = (data: FirestoreUserDoc): AuthUserProfile => ({
   name: data.name,
   email: data.email,
   secretKey: data.secretKey ?? null,
+  phone: data.phone ?? null,
+  recipientId: data.recipientId ?? null,
   createdAt: normalizeTimestamp(data.createdAt),
   updatedAt: normalizeTimestamp(data.updatedAt)
 });
@@ -113,6 +122,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<AuthUserProfile | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
+  const [isProfileReady, setIsProfileReady] = useState(false);
 
   const getProfile = useCallback(async (uid: string) => {
     const ref = doc(db, 'users', uid);
@@ -134,6 +144,8 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
           name: fallbackName(overrides?.name ?? currentUser.displayName),
           email: currentUser.email ?? overrides?.email ?? '',
           secretKey: overrides?.secretKey ?? null,
+          phone: overrides?.phone ?? null,
+          recipientId: overrides?.recipientId ?? null,
           createdAt: serverTimestamp()
         });
       } else if (overrides) {
@@ -149,6 +161,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
 
       const nextProfile = await getProfile(currentUser.uid);
       setProfile(nextProfile);
+      setIsProfileReady(true);
       return nextProfile;
     },
     [getProfile]
@@ -156,17 +169,21 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
 
   const refreshProfile = useCallback(async () => {
     if (!auth.currentUser) return;
+    setIsProfileReady(false);
     const nextProfile = await getProfile(auth.currentUser.uid);
     setProfile(nextProfile);
+    setIsProfileReady(true);
   }, [getProfile]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
       if (firebaseUser) {
+        setIsProfileReady(false);
         await ensureUserDocument(firebaseUser);
       } else {
         setProfile(null);
+        setIsProfileReady(true);
       }
       setIsInitializing(false);
     });
@@ -198,6 +215,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const signOut = useCallback(async () => {
     await firebaseSignOut(auth);
     setProfile(null);
+    setIsProfileReady(true);
   }, []);
 
   const requestPasswordReset = useCallback(async (email: string) => {
@@ -208,7 +226,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     }
   }, []);
 
-  const saveSecretKey = useCallback(async (secretKey: string) => {
+  const saveSecretKey = useCallback(async (secretKey: string, recipientId?: string | null) => {
     if (!auth.currentUser) {
       throw new Error('Nenhum usuario autenticado.');
     }
@@ -219,29 +237,93 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
 
     try {
       const ref = doc(db, 'users', auth.currentUser.uid);
-      await updateDoc(ref, {
+      const changes: Record<string, unknown> = {
         secretKey: trimmed,
         updatedAt: serverTimestamp()
-      });
+      };
+      if (typeof recipientId !== 'undefined') {
+        const normalizedRecipientId = recipientId && recipientId.trim().length > 0 ? recipientId.trim() : null;
+        changes.recipientId = normalizedRecipientId;
+      }
+      await updateDoc(ref, changes);
       await refreshProfile();
     } catch (error) {
       throw new Error(mapFirebaseError(error));
     }
   }, [refreshProfile]);
 
+  const updateProfileDetails = useCallback(
+    async ({ name, email, phone }: { name?: string; email?: string; phone?: string }) => {
+      if (!auth.currentUser) {
+        throw new Error('Nenhum usuario autenticado.');
+      }
+
+      const trimmedName = name?.trim();
+      const trimmedEmail = email?.trim();
+      const trimmedPhone = phone?.trim();
+
+      const changes: Record<string, unknown> = {};
+      if (trimmedName && trimmedName !== profile?.name) {
+        changes.name = trimmedName;
+      }
+      if (trimmedEmail && trimmedEmail !== profile?.email) {
+        changes.email = trimmedEmail;
+      }
+      if (phone !== undefined && trimmedPhone !== profile?.phone) {
+        changes.phone = trimmedPhone && trimmedPhone.length ? trimmedPhone : null;
+      }
+
+      if (Object.keys(changes).length === 0) {
+        return;
+      }
+
+      try {
+        if (changes.name) {
+          await updateProfile(auth.currentUser, { displayName: changes.name as string });
+        }
+        if (changes.email) {
+          await updateEmail(auth.currentUser, changes.email as string);
+        }
+        const ref = doc(db, 'users', auth.currentUser.uid);
+        await updateDoc(ref, {
+          ...changes,
+          updatedAt: serverTimestamp()
+        });
+        await refreshProfile();
+      } catch (error) {
+        throw new Error(mapFirebaseError(error));
+      }
+    },
+    [profile?.email, profile?.name, profile?.phone, refreshProfile]
+  );
+
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
       profile,
       isInitializing,
+      isProfileReady,
       signIn,
       signUp,
       signOut,
       requestPasswordReset,
       saveSecretKey,
+      updateProfileDetails,
       refreshProfile
     }),
-    [isInitializing, profile, requestPasswordReset, saveSecretKey, signIn, signOut, signUp, refreshProfile, user]
+    [
+      isInitializing,
+      isProfileReady,
+      profile,
+      requestPasswordReset,
+      saveSecretKey,
+      updateProfileDetails,
+      signIn,
+      signOut,
+      signUp,
+      refreshProfile,
+      user
+    ]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

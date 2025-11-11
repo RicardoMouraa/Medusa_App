@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import {
+  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -8,6 +9,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import PrimaryButton from '@/components/PrimaryButton';
 import TextField from '@/components/TextField';
@@ -18,6 +20,8 @@ import { useToast } from '@/hooks/useToast';
 type RegisterScreenProps = {
   navigation: any;
 };
+
+const logo = require('../../../assets/logo-horizontal-branca.png');
 
 const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) => {
   const { theme } = usePreferences();
@@ -67,67 +71,70 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) => {
   }, [confirmPassword, email, name, password, showToast, signUp]);
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
-    >
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <View style={styles.header}>
-          <Text style={[styles.title, { color: theme.colors.text }]}>Criar conta</Text>
-          <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
-            Use o mesmo email configurado no painel Medusa Pay.
-          </Text>
-        </View>
-
-        <View style={styles.form}>
-          <TextField label="Nome completo" placeholder="Seu nome" value={name} onChangeText={setName} />
-
-          <TextField
-            label="Email"
-            placeholder="voce@empresa.com"
-            autoCapitalize="none"
-            keyboardType="email-address"
-            value={email}
-            onChangeText={setEmail}
-            autoComplete="email"
-          />
-
-          <TextField
-            label="Senha"
-            placeholder="Minimo 6 caracteres"
-            secureTextEntry
-            value={password}
-            onChangeText={setPassword}
-            autoComplete="password-new"
-          />
-
-          <TextField
-            label="Confirmar senha"
-            placeholder="Repita a senha"
-            secureTextEntry
-            value={confirmPassword}
-            onChangeText={setConfirmPassword}
-            autoComplete="password-new"
-          />
-
-          <PrimaryButton label="Cadastrar" onPress={handleSubmit} loading={isSubmitting} />
-
-          <View style={styles.loginHint}>
-            <Text style={[styles.loginText, { color: theme.colors.textSecondary }]}>
-              Ja possui acesso?
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          <View style={styles.brand}>
+            <Image source={logo} style={styles.logo} resizeMode="contain" />
+            <Text style={[styles.title, { color: theme.colors.text }]}>Criar conta</Text>
+            <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
+              Use o mesmo email configurado no painel Medusa Pay.
             </Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Login')}>
-              <Text style={[styles.linkLabel, { color: theme.colors.primary }]}>Entrar</Text>
-            </TouchableOpacity>
           </View>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+
+          <View style={styles.form}>
+            <TextField label="Nome completo" placeholder="Seu nome" value={name} onChangeText={setName} />
+
+            <TextField
+              label="Email"
+              placeholder="voce@empresa.com"
+              autoCapitalize="none"
+              keyboardType="email-address"
+              value={email}
+              onChangeText={setEmail}
+              autoComplete="email"
+            />
+
+            <TextField
+              label="Senha"
+              placeholder="Minimo 6 caracteres"
+              secureTextEntry
+              value={password}
+              onChangeText={setPassword}
+              autoComplete="password-new"
+            />
+
+            <TextField
+              label="Confirmar senha"
+              placeholder="Repita a senha"
+              secureTextEntry
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              autoComplete="password-new"
+            />
+
+            <PrimaryButton label="Cadastrar" onPress={handleSubmit} loading={isSubmitting} />
+
+            <View style={styles.loginHint}>
+              <Text style={[styles.loginText, { color: theme.colors.textSecondary }]}>
+                Ja possui acesso?
+              </Text>
+              <TouchableOpacity onPress={() => navigation.navigate('Login')}>
+                <Text style={[styles.linkLabel, { color: theme.colors.primary }]}>Entrar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
+    flex: 1
+  },
+  flex: {
     flex: 1
   },
   content: {
@@ -135,9 +142,14 @@ const styles = StyleSheet.create({
     padding: 24,
     justifyContent: 'center'
   },
-  header: {
-    marginBottom: 24,
-    gap: 8
+  brand: {
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 32
+  },
+  logo: {
+    width: 160,
+    height: 60
   },
   title: {
     fontSize: 28,

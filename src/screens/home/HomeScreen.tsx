@@ -8,6 +8,7 @@ import {
   View
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 
 import BalanceSummaryCard from '@/components/BalanceSummaryCard';
 import Card from '@/components/Card';
@@ -17,13 +18,17 @@ import PeriodSelector from '@/components/PeriodFilter';
 import PrimaryButton from '@/components/PrimaryButton';
 import SectionTitle from '@/components/SectionTitle';
 import StatCard from '@/components/StatCard';
+import SalesChartCard from '@/components/SalesChartCard';
 import { useAuth } from '@/context/AuthContext';
 import { usePreferences } from '@/context/PreferencesContext';
 import { useApiRequest } from '@/hooks/useApiRequest';
 import { useToast } from '@/hooks/useToast';
 import { getBalance, getTransactions } from '@/services/medusaApi';
-import { DashboardSummary, PeriodFilter as PeriodFilterValue } from '@/types/api';
+import { DashboardSummary, OrderSummary, PeriodFilter as PeriodFilterValue } from '@/types/api';
 import { formatCurrencyBRL, formatPercentage } from '@/utils/format';
+import { sumPaidNetAmount } from '@/utils/finance';
+import { format, subDays, differenceInCalendarDays } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 type MethodMeta = {
   label: string;
@@ -39,6 +44,11 @@ const METHOD_LABELS: Record<string, MethodMeta> = {
 
 const getMethodMeta = (method: string): MethodMeta =>
   METHOD_LABELS[method] ?? { label: method, icon: 'stats-chart-outline', iconSet: 'ion' };
+
+type SalesChartPoint = {
+  label: string;
+  value: number;
+};
 
 const renderMethodIcon = (meta: MethodMeta, color: string) => {
   if (meta.iconSet === 'materialIcons') {
@@ -111,6 +121,31 @@ const isWithinRange = (dateValue: string | undefined, range: { start: Date; end:
   return date >= range.start && date <= range.end;
 };
 
+const buildDailySales = (transactions: OrderSummary[], days = 6): SalesChartPoint[] => {
+  const today = new Date();
+  const totals = transactions.reduce<Record<string, number>>((acc, transaction) => {
+    const key = format(new Date(transaction.createdAt), 'yyyy-MM-dd');
+    acc[key] = (acc[key] ?? 0) + transaction.amount;
+    return acc;
+  }, {});
+
+  const points: SalesChartPoint[] = [];
+  for (let i = days; i >= 0; i--) {
+    const day = subDays(today, i);
+    const key = format(day, 'yyyy-MM-dd');
+    points.push({
+      label: format(day, 'dd MMM', { locale: ptBR }),
+      value: totals[key] ?? 0
+    });
+  }
+
+  return points;
+};
+
+type DashboardData = DashboardSummary & {
+  dailySales: SalesChartPoint[];
+};
+
 const HomeScreen: React.FC = ({ navigation }: any) => {
   const { theme } = usePreferences();
   const { profile } = useAuth();
@@ -119,18 +154,23 @@ const HomeScreen: React.FC = ({ navigation }: any) => {
   const [customRange, setCustomRange] = useState<{ start: Date; end: Date } | null>(null);
 
   const secretKey = profile?.secretKey;
+  const recipientId = profile?.recipientId ?? undefined;
 
   const fetchDashboard = useCallback(async () => {
     if (!secretKey) {
       throw new Error('Secret Key nao configurada.');
     }
     const [balance, transactions] = await Promise.all([
-      getBalance(secretKey),
-      getTransactions(secretKey, { status: 'paid' })
+      getBalance(secretKey, { recipientId }),
+      getTransactions(secretKey, { count: 100 })
     ]);
 
     const range = resolveRange(period, customRange);
-    const filtered = transactions.filter((transaction) => isWithinRange(transaction.createdAt, range));
+    const paidTransactions = transactions.filter((transaction) => transaction.status === 'paid');
+    const availableFromTransactions = sumPaidNetAmount(paidTransactions);
+    const filtered = paidTransactions.filter((transaction) => isWithinRange(transaction.createdAt, range));
+    const daysSpan = range ? Math.max(0, differenceInCalendarDays(range.end, range.start)) : 6;
+    const dailySales = buildDailySales(filtered, daysSpan);
 
     const totalPaidAmount = filtered.reduce((sum, transaction) => sum + transaction.amount, 0);
     const paidOrdersCount = filtered.length;
@@ -146,21 +186,23 @@ const HomeScreen: React.FC = ({ navigation }: any) => {
 
     return {
       currency: balance.currency,
-      availableBalance: balance.available,
+      availableBalance: availableFromTransactions,
       pendingBalance: balance.pending ?? 0,
       totalPaidAmount,
       paidOrdersCount,
       averageTicket,
-      salesByMethod
-    } satisfies DashboardSummary;
-  }, [customRange, period, secretKey]);
+      salesByMethod,
+      dailySales
+    } satisfies DashboardData;
+  }, [customRange, period, recipientId, secretKey]);
 
-  const {
-    data,
-    isLoading,
-    error,
-    refetch
-  } = useApiRequest<DashboardSummary>(fetchDashboard, [fetchDashboard]);
+  const { data, isLoading, error, refetch } = useApiRequest<DashboardData>(fetchDashboard, [fetchDashboard]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void refetch();
+    }, [refetch])
+  );
 
   const handleFinanceShortcut = useCallback(() => {
     navigation.navigate('FinanceTab');
@@ -193,14 +235,7 @@ const HomeScreen: React.FC = ({ navigation }: any) => {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <MedusaHeader
-        actions={[
-          {
-            icon: 'notifications-outline',
-            onPress: () => showToast({ type: 'info', text1: 'Central de notificações em breve' })
-          }
-        ]}
-      />
+      <MedusaHeader />
 
       <ScrollView
         style={styles.flex}
@@ -257,8 +292,16 @@ const HomeScreen: React.FC = ({ navigation }: any) => {
             </View>
 
             <View style={styles.section}>
-              <SectionTitle title="Vendas por método" caption="Distribuição percentual" />
+              <SalesChartCard data={data.dailySales ?? []} currency={data.currency} />
+            </View>
+
+            <View style={styles.section}>
               <Card>
+                <SectionTitle
+                  title="Vendas por método"
+                  caption="Distribuição percentual"
+                  titleStyle={styles.cardSectionTitle}
+                />
                 {salesDistribution.length === 0 ? (
                   <EmptyState
                     title="Ainda sem vendas"
@@ -329,6 +372,9 @@ const styles = StyleSheet.create({
   section: {
     gap: 16
   },
+  cardSectionTitle: {
+    fontSize: 16
+  },
   scrollHint: {
     fontSize: 12,
     fontWeight: '600'
@@ -379,3 +425,4 @@ const styles = StyleSheet.create({
 });
 
 export default HomeScreen;
+

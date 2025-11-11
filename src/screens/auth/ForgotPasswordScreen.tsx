@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import {
+  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -8,6 +9,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import PrimaryButton from '@/components/PrimaryButton';
 import TextField from '@/components/TextField';
@@ -18,6 +20,8 @@ import { useToast } from '@/hooks/useToast';
 type ForgotPasswordScreenProps = {
   navigation: any;
 };
+
+const logo = require('../../../assets/logo-horizontal-branca.png');
 
 const ForgotPasswordScreen: React.FC<ForgotPasswordScreenProps> = ({ navigation }) => {
   const { theme } = usePreferences();
@@ -56,42 +60,48 @@ const ForgotPasswordScreen: React.FC<ForgotPasswordScreenProps> = ({ navigation 
   }, [email, navigation, requestPasswordReset, showToast]);
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
-    >
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <View style={styles.header}>
-          <Text style={[styles.title, { color: theme.colors.text }]}>Recuperar senha</Text>
-          <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
-            Enviaremos um email com o link de redefinicao.
-          </Text>
-        </View>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.flex}
+      >
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          <View style={styles.brand}>
+            <Image source={logo} style={styles.logo} resizeMode="contain" />
+            <Text style={[styles.title, { color: theme.colors.text }]}>Recuperar senha</Text>
+            <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
+              Enviaremos um email com o link de redefinicao.
+            </Text>
+          </View>
 
-        <View style={styles.form}>
-          <TextField
-            label="Email"
-            placeholder="voce@empresa.com"
-            autoCapitalize="none"
-            keyboardType="email-address"
-            value={email}
-            onChangeText={setEmail}
-            autoComplete="email"
-          />
+          <View style={styles.form}>
+            <TextField
+              label="Email"
+              placeholder="voce@empresa.com"
+              autoCapitalize="none"
+              keyboardType="email-address"
+              value={email}
+              onChangeText={setEmail}
+              autoComplete="email"
+            />
 
-          <PrimaryButton label="Enviar" onPress={handleSubmit} loading={isSubmitting} />
+            <PrimaryButton label="Enviar" onPress={handleSubmit} loading={isSubmitting} />
 
-          <TouchableOpacity style={styles.backLink} onPress={() => navigation.navigate('Login')}>
-            <Text style={[styles.linkLabel, { color: theme.colors.primary }]}>Voltar ao login</Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+            <TouchableOpacity style={styles.backLink} onPress={() => navigation.navigate('Login')}>
+              <Text style={[styles.linkLabel, { color: theme.colors.primary }]}>Voltar ao login</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
+    flex: 1
+  },
+  flex: {
     flex: 1
   },
   content: {
@@ -99,9 +109,14 @@ const styles = StyleSheet.create({
     padding: 24,
     justifyContent: 'center'
   },
-  header: {
-    marginBottom: 24,
-    gap: 8
+  brand: {
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 32
+  },
+  logo: {
+    width: 160,
+    height: 60
   },
   title: {
     fontSize: 28,

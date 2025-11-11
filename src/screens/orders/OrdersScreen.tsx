@@ -7,6 +7,7 @@ import {
   Text,
   View
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 
 import EmptyState from '@/components/EmptyState';
 import MedusaHeader from '@/components/MedusaHeader';
@@ -57,7 +58,15 @@ const OrdersScreen: React.FC = ({ navigation }: any) => {
     [mapStatusFilter, secretKey, status]
   );
 
-  const { data, isLoading, error, refetch } = useApiRequest<OrderSummary[]>(fetchOrders, [fetchOrders]);
+  const { data, isLoading, error, refetch } = useApiRequest<OrderSummary[]>(fetchOrders, [fetchOrders], {
+    refreshInterval: 15000
+  });
+
+  useFocusEffect(
+    useCallback(() => {
+      void refetch();
+    }, [refetch])
+  );
 
   const handleOrderPress = useCallback(
     (order: OrderSummary) => {

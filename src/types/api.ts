@@ -42,6 +42,10 @@ export interface OrderSummary {
   statusLabel?: string;
   createdAt: string;
   paymentMethod?: string;
+  fees?: Array<{
+    label: string;
+    amount: number;
+  }>;
 }
 
 export interface OrderDetail extends OrderSummary {

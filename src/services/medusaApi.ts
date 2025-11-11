@@ -1,4 +1,4 @@
-import { Buffer } from 'buffer';
+import { encode as base64Encode } from 'base-64';
 
 import { ApiError, BalanceResponse, OrderDetail, OrderSummary, WithdrawHistoryItem } from '@/types/api';
 
@@ -9,12 +9,17 @@ type QueryParams = Record<string, string | number | boolean | undefined | null>;
 type MedusaTransaction = {
   id?: number | string;
   code?: string;
+  tid?: string;
   status?: string;
   amount?: number | string;
+  amount_cents?: number;
   paidAmount?: number | string;
   paymentMethod?: string;
+  payment_method?: string;
   createdAt?: string;
+  created_at?: string;
   updatedAt?: string;
+  updated_at?: string;
   customer?: {
     name?: string;
     email?: string;
@@ -30,26 +35,8 @@ type MedusaTransaction = {
     quantity?: number;
   }>;
   metadata?: Record<string, unknown>;
-};
-
-type MedusaTransactionsResponse = {
-  data?: MedusaTransaction[];
-  transactions?: MedusaTransaction[];
-  items?: MedusaTransaction[];
-};
-
-type MedusaBalanceResponse = {
-  available?: number;
-  availableAmount?: number;
-  waitingFunds?: number;
-  waiting_funds?: number;
-  pending?: number;
-  blocked?: number;
-  currency?: string;
-  withdrawFee?: number;
-  transferFee?: number;
-  minimumWithdraw?: number;
-  minimum_withdraw?: number;
+  fees?: Array<Record<string, unknown>>;
+  fee?: Array<Record<string, unknown>> | Record<string, unknown>;
 };
 
 type RequestOptions = {
@@ -68,14 +55,151 @@ const buildUrl = (path: string, query?: QueryParams) => {
   return `${BASE_URL}${path}${searchParams.length ? `?${searchParams.join('&')}` : ''}`;
 };
 
-const buildAuthHeader = (secretKey: string) =>
-  `Basic ${Buffer.from(`${secretKey}:x`).toString('base64')}`;
+const buildAuthHeader = (secretKey: string) => `Basic ${base64Encode(`${secretKey}:x`)}`;
 
-const fromCents = (value?: number | string | null) => {
-  if (value === null || value === undefined) return 0;
-  const numeric = typeof value === 'string' ? Number(value) : value;
-  if (!Number.isFinite(numeric)) return 0;
-  return numeric / 100;
+const getNestedValue = (source: unknown, path: string): unknown => {
+  return path.split('.').reduce<unknown>((acc, segment) => {
+    if (acc && typeof acc === 'object' && segment in (acc as Record<string, unknown>)) {
+      return (acc as Record<string, unknown>)[segment];
+    }
+    return undefined;
+  }, source);
+};
+
+const sanitizeNumberString = (value: string) =>
+  value
+    .replace(/\s+/g, '')
+    .replace(/\./g, '')
+    .replace(',', '.')
+    .replace(/[^\d.-]/g, '');
+
+const toNumber = (value: unknown): number | null => {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const parsed = Number(sanitizeNumberString(value));
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  if (typeof value === 'object') {
+    if ('amount' in (value as Record<string, unknown>)) {
+      return toNumber((value as Record<string, unknown>).amount);
+    }
+    if ('value' in (value as Record<string, unknown>)) {
+      return toNumber((value as Record<string, unknown>).value);
+    }
+  }
+  return null;
+};
+
+const fromMedusaMoney = (value: unknown) => {
+  const numeric = toNumber(value);
+  if (numeric === null) return 0;
+  if (Math.abs(numeric) >= 100 || Number.isInteger(numeric)) {
+    return numeric / 100;
+  }
+  return numeric;
+};
+
+const pickMoney = (payload: unknown, paths: string[], fallbackMatches: string[] = []): number => {
+  for (const path of paths) {
+    const value = getNestedValue(payload, path);
+    if (value !== undefined && value !== null) {
+      return fromMedusaMoney(value);
+    }
+  }
+
+  if (!payload || typeof payload !== 'object' || fallbackMatches.length === 0) {
+    return 0;
+  }
+
+  const loweredMatches = fallbackMatches.map((match) => match.toLowerCase());
+  const queue: unknown[] = [payload];
+  const visited = new Set<unknown>();
+
+  while (queue.length) {
+    const current = queue.shift();
+    if (!current || typeof current !== 'object') continue;
+    if (visited.has(current)) continue;
+    visited.add(current);
+
+    for (const [key, value] of Object.entries(current)) {
+      if (loweredMatches.some((match) => key.toLowerCase().includes(match))) {
+        const numeric = toNumber(value);
+        if (numeric !== null) {
+          return fromMedusaMoney(numeric);
+        }
+      }
+
+      if (value && typeof value === 'object') {
+        queue.push(value);
+      }
+    }
+  }
+
+  return 0;
+};
+
+const extractArray = (payload: unknown): MedusaTransaction[] => {
+  if (Array.isArray(payload)) {
+    return payload as MedusaTransaction[];
+  }
+
+  const queue: unknown[] = [payload];
+  const visited = new Set<unknown>();
+  const candidateKeys = ['data', 'items', 'transactions', 'results', 'response', 'collection'];
+
+  while (queue.length) {
+    const current = queue.shift();
+    if (!current || typeof current !== 'object') continue;
+    if (visited.has(current)) continue;
+    visited.add(current);
+
+    if (Array.isArray(current)) {
+      return current as MedusaTransaction[];
+    }
+
+    for (const key of candidateKeys) {
+      const value = (current as Record<string, unknown>)[key];
+      if (Array.isArray(value)) {
+        return value as MedusaTransaction[];
+      }
+      if (value && typeof value === 'object') {
+        queue.push(value);
+      }
+    }
+
+    for (const value of Object.values(current)) {
+      if (Array.isArray(value)) {
+        return value as MedusaTransaction[];
+      }
+      if (value && typeof value === 'object') {
+        queue.push(value);
+      }
+    }
+  }
+
+  return [];
+};
+
+const unwrapTransaction = (payload: unknown): MedusaTransaction => {
+  if (payload && typeof payload === 'object') {
+    if ('transaction' in (payload as Record<string, unknown>)) {
+      return (payload as Record<string, unknown>).transaction as MedusaTransaction;
+    }
+    if ('data' in (payload as Record<string, unknown>)) {
+      return unwrapTransaction((payload as Record<string, unknown>).data);
+    }
+  }
+  return (payload ?? {}) as MedusaTransaction;
+};
+
+const mapPaymentMethod = (value?: string) => {
+  if (!value) return 'Indefinido';
+  const normalized = value.toLowerCase();
+  if (normalized.includes('credit')) return 'Cartao de credito';
+  if (normalized.includes('boleto')) return 'Boleto';
+  if (normalized.includes('pix')) return 'Pix';
+  return value;
 };
 
 const mapStatusLabel = (status?: string) => {
@@ -103,22 +227,10 @@ const mapStatusLabel = (status?: string) => {
   }
 };
 
-const mapPaymentMethod = (paymentMethod?: string) => {
-  switch (paymentMethod) {
-    case 'credit_card':
-      return 'Cartao de credito';
-    case 'boleto':
-      return 'Boleto';
-    case 'pix':
-      return 'Pix';
-    default:
-      return paymentMethod ?? 'Desconhecido';
-  }
-};
-
 const mapTransferStatus = (status?: string): WithdrawHistoryItem['status'] => {
-  switch (status) {
+  switch ((status ?? '').toLowerCase()) {
     case 'success':
+    case 'paid':
       return 'paid';
     case 'failed':
       return 'failed';
@@ -129,29 +241,97 @@ const mapTransferStatus = (status?: string): WithdrawHistoryItem['status'] => {
   }
 };
 
+type FeeEntry = {
+  label: string;
+  amount: number;
+};
+
+type FeeSource = {
+  label?: unknown;
+  description?: unknown;
+  type?: unknown;
+  amount?: unknown;
+  amount_cents?: unknown;
+  value?: unknown;
+  total?: unknown;
+};
+
+const coerceFeeArray = (value: unknown): FeeSource[] => {
+  if (Array.isArray(value)) {
+    return value.filter((item): item is FeeSource => Boolean(item && typeof item === 'object'));
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.entries(value).map(([label, extra]) => {
+      if (extra && typeof extra === 'object') {
+        return { label, ...(extra as Record<string, unknown>) };
+      }
+      return { label, amount: extra as unknown };
+    });
+  }
+
+  return [];
+};
+
+const mapFees = (transaction: MedusaTransaction): FeeEntry[] => {
+  const raw = transaction.fees ?? transaction.fee;
+  if (!raw) return [];
+
+  const entries = coerceFeeArray(raw);
+  return entries
+    .map((entry, index) => {
+      const label =
+        (typeof entry.label === 'string' && entry.label) ||
+        (typeof entry.description === 'string' && entry.description) ||
+        (typeof entry.type === 'string' && entry.type) ||
+        `Taxa ${index + 1}`;
+      const amount = fromMedusaMoney(
+        (entry.amount as unknown) ??
+          (entry.amount_cents as unknown) ??
+          (entry.value as unknown) ??
+          (entry.total as unknown)
+      );
+      if (!amount) return null;
+      return { label, amount };
+    })
+    .filter((fee): fee is FeeEntry => Boolean(fee));
+};
+
 const mapTransactionToOrder = (transaction: MedusaTransaction): OrderDetail => {
-  const amount =
-    fromCents(transaction.paidAmount ?? transaction.amount) || 0;
+  const amount = fromMedusaMoney(
+    transaction.paidAmount ??
+      transaction.amount ??
+      transaction.amount_cents ??
+      (transaction as Record<string, unknown>).amountInCents
+  );
+
+  const createdAt =
+    transaction.createdAt ??
+    transaction.created_at ??
+    transaction.updatedAt ??
+    transaction.updated_at ??
+    new Date().toISOString();
 
   return {
-    id: String(transaction.id ?? transaction.code ?? Date.now()),
-    code: String(transaction.code ?? transaction.id ?? 'transacao'),
+    id: String(transaction.id ?? transaction.code ?? transaction.tid ?? Date.now()),
+    code: String(transaction.code ?? transaction.id ?? transaction.tid ?? 'transacao'),
     customerName: transaction.customer?.name ?? 'Cliente',
     customerEmail: transaction.customer?.email,
     customerPhone: transaction.customer?.phone,
     amount,
     status: transaction.status ?? 'processing',
     statusLabel: mapStatusLabel(transaction.status),
-    createdAt: transaction.createdAt ?? new Date().toISOString(),
-    paymentMethod: mapPaymentMethod(transaction.paymentMethod),
+    createdAt,
+    paymentMethod: mapPaymentMethod(transaction.paymentMethod ?? transaction.payment_method),
     items:
       transaction.items?.map((item) => ({
         id: String(item.id ?? item.title ?? item.name ?? Math.random()),
         name: item.name ?? item.title ?? 'Item',
         quantity: item.quantity ?? 1,
-        unitPrice: fromCents(item.unitPrice ?? item.unit_price ?? item.amount)
+        unitPrice: fromMedusaMoney(item.unitPrice ?? item.unit_price ?? item.amount)
       })) ?? [],
     metadata: transaction.metadata,
+    fees: mapFees(transaction),
     timeline: []
   };
 };
@@ -174,10 +354,14 @@ const handleErrorResponse = async (response: Response): Promise<ApiError> => {
       ? 'Secret Key invalida ou nao autorizada.'
       : 'Erro na API da Medusa Pay.';
 
-  const message =
+  let message =
     (typeof parsed === 'object' && parsed && 'message' in parsed
       ? (parsed as { message?: string }).message
       : undefined) ?? defaultMessage;
+
+  if (status === 401 && message && message.toUpperCase().includes('RL-2')) {
+    message = 'Token invalido (RL-2). Verifique sua Secret Key e tente novamente.';
+  }
 
   return {
     message,
@@ -225,16 +409,77 @@ const request = async <T>(path: string, secretKey: string, options?: RequestOpti
   return text ? (JSON.parse(text) as T) : ({} as T);
 };
 
-export const getBalance = async (secretKey: string): Promise<BalanceResponse> => {
-  const payload = await request<MedusaBalanceResponse>('/balance/available', secretKey);
+export const getBalance = async (
+  secretKey: string,
+  options?: { recipientId?: string | number | null }
+): Promise<BalanceResponse> => {
+  const hasRecipient =
+    options?.recipientId !== undefined && options?.recipientId !== null && options?.recipientId !== '';
+
+  const payload = await request<Record<string, unknown>>('/balance/available', secretKey, {
+    query: hasRecipient ? { recipientId: options?.recipientId } : undefined
+  });
+
+  const available = pickMoney(
+    payload,
+    [
+      'available',
+      'available.amount',
+      'balance.available',
+      'balance.available.amount',
+      'data.available',
+      'balances.available'
+    ],
+    ['available', 'saldo', 'available_balance', 'saldo_disponivel']
+  );
+
+  const pending = pickMoney(
+    payload,
+    [
+      'waitingFunds',
+      'waiting_funds',
+      'pending',
+      'balance.pending',
+      'data.waitingFunds',
+      'data.pending'
+    ],
+    ['waiting', 'pending', 'aguardando']
+  );
+
+  const blocked = pickMoney(
+    payload,
+    ['blocked', 'balance.blocked', 'data.blocked'],
+    ['blocked', 'bloqueado']
+  );
+
+  const withdrawFee = pickMoney(
+    payload,
+    [
+      'withdrawFee',
+      'withdraw_fee',
+      'fees.withdraw',
+      'fees.withdraw_fee',
+      'transferFee',
+      'transfer_fee'
+    ],
+    ['fee', 'taxa', 'transfer_fee']
+  );
+  const minimumWithdraw = pickMoney(
+    payload,
+    ['minimumWithdraw', 'minimum_withdraw', 'withdraw.minimum'],
+    ['minimum', 'minimo']
+  );
 
   return {
-    available: fromCents(payload.available ?? payload.availableAmount ?? 0),
-    pending: fromCents(payload.waitingFunds ?? payload.waiting_funds ?? payload.pending ?? 0),
-    blocked: fromCents(payload.blocked ?? 0),
-    currency: payload.currency ?? 'BRL',
-    withdrawFee: fromCents(payload.withdrawFee ?? payload.transferFee ?? 0),
-    minimumWithdraw: fromCents(payload.minimumWithdraw ?? payload.minimum_withdraw ?? 0)
+    available,
+    pending,
+    blocked,
+    currency:
+      (payload.currency as string) ??
+      (getNestedValue(payload, 'balance.currency') as string) ??
+      'BRL',
+    withdrawFee,
+    minimumWithdraw
   };
 };
 
@@ -242,10 +487,17 @@ export const getTransactions = async (
   secretKey: string,
   params?: QueryParams
 ): Promise<OrderSummary[]> => {
-  const response = await request<MedusaTransactionsResponse>('/transactions', secretKey, {
-    query: params
+  const query: QueryParams = {
+    page: 1,
+    count: 50,
+    sort: 'desc',
+    ...params
+  };
+
+  const response = await request<unknown>('/transactions', secretKey, {
+    query
   });
-  const transactions = response.data ?? response.transactions ?? response.items ?? [];
+  const transactions = extractArray(response);
   return transactions.map((transaction) => {
     const detail = mapTransactionToOrder(transaction);
     const { items, timeline, metadata, ...summary } = detail;
@@ -254,8 +506,8 @@ export const getTransactions = async (
 };
 
 export const getTransactionById = async (secretKey: string, transactionId: string) => {
-  const payload = await request<MedusaTransaction>(`/transactions/${transactionId}`, secretKey);
-  return mapTransactionToOrder(payload);
+  const payload = await request<unknown>(`/transactions/${transactionId}`, secretKey);
+  return mapTransactionToOrder(unwrapTransaction(payload));
 };
 
 export const getCompany = async (secretKey: string) => {
@@ -270,33 +522,55 @@ export const getCustomers = async (secretKey: string) => {
   return request<Record<string, unknown>>('/customers', secretKey);
 };
 
+const normalizePixKeyType = (value?: string) => {
+  if (!value) return undefined;
+  const normalized = value.toLowerCase();
+  if (normalized.includes('cpf')) return 'cpf';
+  if (normalized.includes('cnpj')) return 'cnpj';
+  if (normalized.includes('email')) return 'email';
+  if (normalized.includes('telefone') || normalized.includes('phone')) return 'phone';
+  if (normalized.includes('aleat')) return 'random';
+  if (normalized.includes('qr')) return 'qr_code';
+  return normalized;
+};
+
 export const createTransfer = async (
   secretKey: string,
   payload: {
     amount: number;
     pixKey?: string;
+    pixKeyType?: string;
     recipientId?: number;
     postbackUrl?: string;
   }
 ) => {
   return request<Record<string, unknown>>('/transfers', secretKey, {
     method: 'POST',
-    body: payload
+    body: {
+      amount: payload.amount,
+      pixKey: payload.pixKey,
+      pixKeyType: normalizePixKeyType(payload.pixKeyType),
+      recipientId: payload.recipientId,
+      postbackUrl: payload.postbackUrl
+    }
   });
 };
 
 export const getTransfers = async (secretKey: string): Promise<WithdrawHistoryItem[]> => {
-  const response = await request<{ data?: Array<Record<string, unknown>>; transfers?: Array<Record<string, unknown>> }>(
-    '/transfers',
-    secretKey
-  );
-  const transfers = response.data ?? response.transfers ?? [];
+  const response = await request<unknown>('/transfers', secretKey);
+  const transfers = extractArray(response);
 
   return transfers.map((transfer) => ({
-    id: String(transfer.id ?? Math.random()),
-    createdAt: (transfer.createdAt as string) ?? new Date().toISOString(),
-    amount: fromCents((transfer.amount as number) ?? 0),
-    status: mapTransferStatus(transfer.status as string | undefined),
-    description: transfer.failReason ? String(transfer.failReason) : undefined
+    id: String((transfer as Record<string, unknown>).id ?? Math.random()),
+    createdAt:
+      (transfer as Record<string, unknown>).createdAt?.toString() ??
+      (transfer as Record<string, unknown>).created_at?.toString() ??
+      new Date().toISOString(),
+    amount: fromMedusaMoney(
+      (transfer as Record<string, unknown>).amount ??
+        (transfer as Record<string, unknown>).amount_cents
+    ),
+    status: mapTransferStatus((transfer as Record<string, unknown>).status?.toString()),
+    description: (transfer as Record<string, unknown>).failReason?.toString()
   }));
 };

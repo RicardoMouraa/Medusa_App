@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import {
+  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -8,6 +9,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import PrimaryButton from '@/components/PrimaryButton';
 import TextField from '@/components/TextField';
@@ -18,6 +20,8 @@ import { useToast } from '@/hooks/useToast';
 type LoginScreenProps = {
   navigation: any;
 };
+
+const logo = require('../../../assets/logo-horizontal-branca.png');
 
 const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
   const { theme } = usePreferences();
@@ -62,60 +66,66 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
   }, [email, password, showToast, signIn]);
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
-    >
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <View style={styles.header}>
-          <Text style={[styles.title, { color: theme.colors.text }]}>Bem-vindo</Text>
-          <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
-            Acesse com seu email cadastrado no painel.
-          </Text>
-        </View>
-
-        <View style={styles.form}>
-          <TextField
-            label="Email"
-            placeholder="voce@empresa.com"
-            autoCapitalize="none"
-            keyboardType="email-address"
-            value={email}
-            onChangeText={setEmail}
-            autoComplete="email"
-          />
-
-          <TextField
-            label="Senha"
-            placeholder="Sua senha"
-            secureTextEntry
-            value={password}
-            onChangeText={setPassword}
-            autoComplete="password"
-          />
-
-          <TouchableOpacity style={styles.link} onPress={() => handleNavigate('ForgotPassword')}>
-            <Text style={[styles.linkLabel, { color: theme.colors.primary }]}>Esqueci minha senha</Text>
-          </TouchableOpacity>
-
-          <PrimaryButton label="Entrar" onPress={handleSubmit} loading={isSubmitting} />
-
-          <View style={styles.registerHint}>
-            <Text style={[styles.registerText, { color: theme.colors.textSecondary }]}>
-              Ainda nao tem conta?
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.flex}
+      >
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          <View style={styles.brand}>
+            <Image source={logo} style={styles.logo} resizeMode="contain" />
+            <Text style={[styles.title, { color: theme.colors.text }]}>Bem-vindo de volta</Text>
+            <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
+              Entre com as credenciais do seu painel Medusa Pay.
             </Text>
-            <TouchableOpacity onPress={() => handleNavigate('Register')}>
-              <Text style={[styles.linkLabel, { color: theme.colors.primary }]}>Criar conta</Text>
-            </TouchableOpacity>
           </View>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+
+          <View style={styles.form}>
+            <TextField
+              label="Email"
+              placeholder="voce@empresa.com"
+              autoCapitalize="none"
+              keyboardType="email-address"
+              value={email}
+              onChangeText={setEmail}
+              autoComplete="email"
+            />
+
+            <TextField
+              label="Senha"
+              placeholder="Sua senha"
+              secureTextEntry
+              value={password}
+              onChangeText={setPassword}
+              autoComplete="password"
+            />
+
+            <TouchableOpacity style={styles.link} onPress={() => handleNavigate('ForgotPassword')}>
+              <Text style={[styles.linkLabel, { color: theme.colors.primary }]}>Esqueci minha senha</Text>
+            </TouchableOpacity>
+
+            <PrimaryButton label="Entrar" onPress={handleSubmit} loading={isSubmitting} />
+
+            <View style={styles.registerHint}>
+              <Text style={[styles.registerText, { color: theme.colors.textSecondary }]}>
+                Ainda nao tem conta?
+              </Text>
+              <TouchableOpacity onPress={() => handleNavigate('Register')}>
+                <Text style={[styles.linkLabel, { color: theme.colors.primary }]}>Criar conta</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
+    flex: 1
+  },
+  flex: {
     flex: 1
   },
   content: {
@@ -123,9 +133,14 @@ const styles = StyleSheet.create({
     padding: 24,
     justifyContent: 'center'
   },
-  header: {
-    marginBottom: 24,
-    gap: 8
+  brand: {
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 32
+  },
+  logo: {
+    width: 160,
+    height: 60
   },
   title: {
     fontSize: 28,

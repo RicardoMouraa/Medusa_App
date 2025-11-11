@@ -2,7 +2,7 @@ import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 
 import { usePreferences } from '@/context/PreferencesContext';
 import { useAuth } from '@/context/AuthContext';
@@ -16,6 +16,8 @@ import LoginScreen from '@/screens/auth/LoginScreen';
 import RegisterScreen from '@/screens/auth/RegisterScreen';
 import ForgotPasswordScreen from '@/screens/auth/ForgotPasswordScreen';
 import SecretKeyScreen from '@/screens/auth/SecretKeyScreen';
+import ProfileScreen from '@/screens/profile/ProfileScreen';
+import BrandSplash from '@/components/BrandSplash';
 import {
   AppTabParamList,
   AuthStackParamList,
@@ -40,7 +42,7 @@ const renderTabIcon = (
   const size = focused ? 26 : 24;
   switch (route) {
     case 'HomeTab':
-      return <Ionicons name={focused ? 'speedometer' : 'speedometer-outline'} size={size} color={color} />;
+      return <Ionicons name={focused ? 'home' : 'home-outline'} size={size} color={color} />;
     case 'OrdersTab':
       return (
         <MaterialCommunityIcons
@@ -137,9 +139,10 @@ const AppTabsNavigator = () => {
         tabBarStyle: {
           backgroundColor: theme.colors.tabBarBackground,
           borderTopColor: theme.colors.border,
-          paddingTop: 4,
-          paddingBottom: 10,
-          height: 70
+          paddingTop: 6,
+          paddingBottom: Platform.OS === 'ios' ? 22 : 14,
+          height: Platform.OS === 'ios' ? 88 : 76,
+          marginBottom: Platform.OS === 'android' ? 6 : 0
         },
         tabBarLabelStyle: {
           fontSize: 12,
@@ -156,7 +159,7 @@ const AppTabsNavigator = () => {
       <AppTabs.Screen
         name="SettingsTab"
         component={SettingsScreen}
-        options={{ title: 'Configurações' }}
+        options={{ title: 'Configuracoes' }}
       />
     </AppTabs.Navigator>
   );
@@ -164,15 +167,10 @@ const AppTabsNavigator = () => {
 
 const RootNavigator = () => {
   const { theme } = usePreferences();
-  const { isInitializing, user, profile } = useAuth();
+  const { isInitializing, isProfileReady, user, profile } = useAuth();
 
-  if (isInitializing) {
-    return (
-      <View style={[styles.loaderContainer, { backgroundColor: theme.colors.background }]}>
-        <ActivityIndicator size="large" color={theme.colors.primary} />
-        <Text style={[styles.loaderText, { color: theme.colors.textSecondary }]}>Preparando app...</Text>
-      </View>
-    );
+  if (isInitializing || !isProfileReady) {
+    return <BrandSplash />;
   }
 
   if (!user) {
@@ -204,6 +202,7 @@ const RootNavigator = () => {
       }}
     >
       <RootStack.Screen name="App" component={AppTabsNavigator} />
+      <RootStack.Screen name="Profile" component={ProfileScreen} />
     </RootStack.Navigator>
   );
 };

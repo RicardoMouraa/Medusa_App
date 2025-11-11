@@ -12,6 +12,7 @@ const SecretKeyScreen: React.FC = () => {
   const { profile, saveSecretKey, signOut } = useAuth();
   const { showToast } = useToast();
   const [secretKey, setSecretKey] = useState(profile?.secretKey ?? '');
+  const [recipientId, setRecipientId] = useState(profile?.recipientId ?? '');
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -20,10 +21,16 @@ const SecretKeyScreen: React.FC = () => {
     }
   }, [profile?.secretKey, secretKey]);
 
+  useEffect(() => {
+    if (profile?.recipientId && !recipientId) {
+      setRecipientId(profile.recipientId);
+    }
+  }, [profile?.recipientId, recipientId]);
+
   const handleSave = useCallback(async () => {
     try {
       setIsSaving(true);
-      await saveSecretKey(secretKey);
+      await saveSecretKey(secretKey, recipientId);
       showToast({
         type: 'success',
         text1: 'Secret Key salva',
@@ -38,7 +45,7 @@ const SecretKeyScreen: React.FC = () => {
     } finally {
       setIsSaving(false);
     }
-  }, [saveSecretKey, secretKey, showToast]);
+  }, [recipientId, saveSecretKey, secretKey, showToast]);
 
   const handleSignOut = useCallback(async () => {
     await signOut();
@@ -61,6 +68,13 @@ const SecretKeyScreen: React.FC = () => {
             onChangeText={setSecretKey}
             autoCapitalize="none"
             autoCorrect={false}
+          />
+          <TextField
+            label="Recipient ID (opcional)"
+            placeholder="ex: 123456"
+            value={recipientId}
+            onChangeText={setRecipientId}
+            keyboardType="number-pad"
           />
 
           <PrimaryButton label="Salvar Secret Key" onPress={handleSave} loading={isSaving} />
