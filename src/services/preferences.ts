@@ -1,4 +1,5 @@
 import { NotificationPreferences, UserPreferencesResponse } from '@/types/api';
+import { DEFAULT_DASHBOARD_ID } from '@/constants/dashboards';
 
 const defaultNotifications: NotificationPreferences = {
   withdraws: true,
@@ -15,7 +16,8 @@ let storedPreferences: UserPreferencesResponse = {
   theme: 'light',
   language: 'pt-BR',
   notifications: defaultNotifications,
-  expoPushToken: null
+  expoPushToken: null,
+  selectedDashboardId: DEFAULT_DASHBOARD_ID
 };
 
 const clone = (preferences: UserPreferencesResponse): UserPreferencesResponse => ({

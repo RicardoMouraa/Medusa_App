@@ -9,32 +9,37 @@ import { useToast } from '@/hooks/useToast';
 
 const SecretKeyScreen: React.FC = () => {
   const { theme } = usePreferences();
-  const { profile, saveSecretKey, signOut } = useAuth();
+  const { profile, saveSecretKeys, signOut } = useAuth();
   const { showToast } = useToast();
   const [secretKey, setSecretKey] = useState(profile?.secretKey ?? '');
+  const [secondarySecretKey, setSecondarySecretKey] = useState(profile?.secondarySecretKey ?? '');
   const [recipientId, setRecipientId] = useState(profile?.recipientId ?? '');
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    if (profile?.secretKey && !secretKey) {
-      setSecretKey(profile.secretKey);
-    }
-  }, [profile?.secretKey, secretKey]);
+    setSecretKey(profile?.secretKey ?? '');
+  }, [profile?.secretKey]);
 
   useEffect(() => {
-    if (profile?.recipientId && !recipientId) {
-      setRecipientId(profile.recipientId);
-    }
-  }, [profile?.recipientId, recipientId]);
+    setSecondarySecretKey(profile?.secondarySecretKey ?? '');
+  }, [profile?.secondarySecretKey]);
+
+  useEffect(() => {
+    setRecipientId(profile?.recipientId ?? '');
+  }, [profile?.recipientId]);
 
   const handleSave = useCallback(async () => {
     try {
       setIsSaving(true);
-      await saveSecretKey(secretKey, recipientId);
+      await saveSecretKeys({
+        secretKey,
+        secondarySecretKey,
+        recipientId
+      });
       showToast({
         type: 'success',
-        text1: 'Secret Key salva',
-        text2: 'Agora seus dados serao carregados direto do gateway.'
+        text1: 'Passkeys salvas',
+        text2: 'Voce pode alternar entre os dashboards nas configuracoes.'
       });
     } catch (error) {
       showToast({
@@ -45,7 +50,7 @@ const SecretKeyScreen: React.FC = () => {
     } finally {
       setIsSaving(false);
     }
-  }, [recipientId, saveSecretKey, secretKey, showToast]);
+  }, [recipientId, saveSecretKeys, secondarySecretKey, secretKey, showToast]);
 
   const handleSignOut = useCallback(async () => {
     await signOut();
@@ -55,17 +60,25 @@ const SecretKeyScreen: React.FC = () => {
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.card}>
-          <Text style={[styles.title, { color: theme.colors.text }]}>Informe sua Secret Key</Text>
+          <Text style={[styles.title, { color: theme.colors.text }]}>Informe suas Passkeys</Text>
           <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
-            Copie a chave no painel do Medusa Pay (Menu &gt; API Keys) e cole abaixo. Ela sera usada para assinar
-            as chamadas usando o header Basic conforme a documentacao oficial.
+            Passkey 1 e obrigatoria para liberar o app. A Passkey 2 e opcional e libera o Dashboard 2 descrito na
+            documentacao fornecida.
           </Text>
 
           <TextField
-            label="Secret Key"
+            label="Passkey 1 (obrigatoria)"
             placeholder="sk_live_xxx..."
             value={secretKey}
             onChangeText={setSecretKey}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          <TextField
+            label="Passkey 2 (opcional)"
+            placeholder="sk_live_xxx..."
+            value={secondarySecretKey}
+            onChangeText={setSecondarySecretKey}
             autoCapitalize="none"
             autoCorrect={false}
           />

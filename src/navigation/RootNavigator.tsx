@@ -203,6 +203,7 @@ const RootNavigator = () => {
     >
       <RootStack.Screen name="App" component={AppTabsNavigator} />
       <RootStack.Screen name="Profile" component={ProfileScreen} />
+      <RootStack.Screen name="SecretKey" component={SecretKeyScreen} />
     </RootStack.Navigator>
   );
 };

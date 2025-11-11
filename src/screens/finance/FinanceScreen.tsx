@@ -20,6 +20,7 @@ import { usePreferences } from '@/context/PreferencesContext';
 import { useApiRequest } from '@/hooks/useApiRequest';
 import { useToast } from '@/hooks/useToast';
 import { getBalance, createTransfer, getTransactions } from '@/services/medusaApi';
+import { useDashboard } from '@/hooks/useDashboard';
 import { ApiError, BalanceResponse, OrderSummary, WithdrawRequestPayload } from '@/types/api';
 import { formatCurrencyBRL } from '@/utils/format';
 import { maskCurrency, parseCurrencyToNumber } from '@/utils/validation';
@@ -42,6 +43,7 @@ type FinanceData = {
 const FinanceScreen: React.FC = ({ navigation }: any) => {
   const { theme } = usePreferences();
   const { profile } = useAuth();
+  const { definition, secretKey, apiOptions } = useDashboard();
   const { showToast } = useToast();
 
   const [selectedType, setSelectedType] = useState<(typeof PIX_KEY_TYPES)[number]>('CPF');
@@ -49,18 +51,19 @@ const FinanceScreen: React.FC = ({ navigation }: any) => {
   const [withdrawValue, setWithdrawValue] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const secretKey = profile?.secretKey;
   const recipientId = profile?.recipientId ?? undefined;
 
   const fetchFinanceData = useCallback(
     () =>
       secretKey
         ? Promise.all([
-            getBalance(secretKey, { recipientId }),
-            getTransactions(secretKey, { count: 100 })
+            getBalance(secretKey, { recipientId }, apiOptions),
+            getTransactions(secretKey, { count: 100 }, apiOptions)
           ]).then(([balance, transactions]) => ({ balance, transactions }))
-        : Promise.reject(new Error('Secret Key nao configurada.')),
-    [recipientId, secretKey]
+        : Promise.reject(
+            new Error(`Informe ${definition.passkeyLabel} para acessar o ${definition.shortLabel}.`)
+          ),
+    [apiOptions, definition.passkeyLabel, definition.shortLabel, recipientId, secretKey]
   );
 
   const {
@@ -138,38 +141,60 @@ const FinanceScreen: React.FC = ({ navigation }: any) => {
     };
   }, [pixKey, selectedType, withdrawValue]);
 
-  const handleSubmit = useCallback(async () => {
-    if (!validate()) return;
-    try {
-      setIsSubmitting(true);
-      if (!secretKey) {
-        throw new Error('Secret Key nao configurada.');
-      }
-      const amountInCents = Math.round(payload.amount * 100);
-      await createTransfer(secretKey, {
-        amount: amountInCents,
-        pixKey,
-        pixKeyType: selectedType
+  const handleSubmit = useCallback(async () => {
+    if (!validate()) return;
+
+    try {
+      setIsSubmitting(true);
+
+      if (!secretKey) {
+        throw new Error(`Informe ${definition.passkeyLabel} para solicitar saques no ${definition.shortLabel}.`);
+      }
+
+      const amountInCents = Math.round(payload.amount * 100);
+
+      await createTransfer(
+        secretKey,
+        {
+          amount: amountInCents,
+          pixKey: payload.pixKey,
+          pixKeyType: payload.pixKeyType,
+          recipientId: recipientId ? Number(recipientId) : undefined
+        },
+        apiOptions
+      );
+      showToast({
+        type: 'success',
+        text1: 'Transferencia criada',
+        text2: 'Acompanhe o status na aba de historico.'
       });
-      showToast({
-        type: 'success',
-        text1: 'Transferencia criada',
-        text2: 'Acompanhe o status na aba de historico.'
-      });
-      setPixKey('');
-      setWithdrawValue('');
-      await refetch();
-    } catch (err) {
-      const apiError = err as ApiError;
-      showToast({
-        type: 'error',
-        text1: 'Erro ao solicitar saque',
-        text2: apiError.message
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
-  }, [payload, pixKey, refetch, secretKey, showToast, validate]);
+
+      setPixKey('');
+      setWithdrawValue('');
+      await refetch();
+    } catch (err) {
+      const apiError = err as ApiError;
+
+      showToast({
+        type: 'error',
+        text1: 'Erro ao solicitar saque',
+        text2: apiError.message
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [
+    apiOptions,
+    definition.passkeyLabel,
+    definition.shortLabel,
+    payload,
+    recipientId,
+    refetch,
+    secretKey,
+    showToast,
+    validate
+  ]);
+
 
 
   const handleHistoryPress = useCallback(() => {
@@ -189,6 +214,7 @@ const FinanceScreen: React.FC = ({ navigation }: any) => {
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <MedusaHeader
         title="Financeiro"
+        subtitle={definition.shortLabel}
         actions={[
           {
             icon: 'refresh',

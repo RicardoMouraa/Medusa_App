@@ -17,6 +17,7 @@ import { usePreferences } from '@/context/PreferencesContext';
 import { useApiRequest } from '@/hooks/useApiRequest';
 import { useToast } from '@/hooks/useToast';
 import { getCompany } from '@/services/medusaApi';
+import { useDashboard } from '@/hooks/useDashboard';
 
 const maskSecretKey = (secret?: string | null) => {
   if (!secret) return 'Nao informada';
@@ -54,6 +55,7 @@ const formatCompanyField = (value: unknown): string => {
 
 const ProfileScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const { profile, requestPasswordReset, signOut, updateProfileDetails } = useAuth();
+  const { definition, secretKey, apiOptions } = useDashboard();
   const { theme } = usePreferences();
   const { showToast } = useToast();
   const [name, setName] = useState(profile?.name ?? '');
@@ -66,14 +68,14 @@ const ProfileScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
     isLoading: isCompanyLoading
   } = useApiRequest<Record<string, unknown>>(
     () => {
-      if (!profile?.secretKey) {
-        throw new Error('Secret Key nao configurada.');
+      if (!secretKey) {
+        throw new Error(`Informe ${definition.passkeyLabel} para carregar os dados do ${definition.shortLabel}.`);
       }
-      return getCompany(profile.secretKey);
+      return getCompany(secretKey, apiOptions);
     },
-    [profile?.secretKey],
+    [apiOptions, definition.passkeyLabel, definition.shortLabel, secretKey],
     {
-      immediate: Boolean(profile?.secretKey)
+      immediate: Boolean(secretKey)
     }
   );
 
@@ -95,7 +97,12 @@ const ProfileScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
     return `${first}${last}`.toUpperCase();
   }, [profile?.name]);
 
-  const maskedSecretKey = useMemo(() => maskSecretKey(profile?.secretKey), [profile?.secretKey]);
+  const maskedSecretKeyActive = useMemo(() => maskSecretKey(secretKey), [secretKey]);
+  const maskedPrimarySecretKey = useMemo(() => maskSecretKey(profile?.secretKey), [profile?.secretKey]);
+  const maskedSecondarySecretKey = useMemo(
+    () => maskSecretKey(profile?.secondarySecretKey),
+    [profile?.secondarySecretKey]
+  );
 
   const handlePasswordReset = useCallback(async () => {
     if (!profile?.email) {
@@ -113,6 +120,10 @@ const ProfileScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
       text2: 'Veja sua caixa de entrada.'
     });
   }, [profile?.email, requestPasswordReset, showToast]);
+
+  const handleManagePasskeys = useCallback(() => {
+    navigation.navigate('SecretKey');
+  }, [navigation]);
 
   const handleLogout = useCallback(async () => {
     await signOut();
@@ -160,8 +171,8 @@ const ProfileScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
               <Text style={[styles.heroName, { color: theme.colors.text }]}>{profile?.name ?? 'Usuário'}</Text>
               <Text style={[styles.heroEmail, { color: theme.colors.textSecondary }]}>{profile?.email ?? '---'}</Text>
               <View style={styles.secretPill}>
-                <Text style={styles.secretLabel}>Secret Key</Text>
-                <Text style={styles.secretValue}>{maskedSecretKey}</Text>
+                <Text style={styles.secretLabel}>{definition.passkeyLabel}</Text>
+                <Text style={styles.secretValue}>{maskedSecretKeyActive}</Text>
               </View>
             </View>
           </View>
@@ -222,6 +233,15 @@ const ProfileScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
 
         <Card style={styles.card}>
           <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Segurança</Text>
+          <View style={styles.detailRow}>
+            <Text style={[styles.detailLabel, { color: theme.colors.textSecondary }]}>Passkey 1</Text>
+            <Text style={[styles.detailValue, { color: theme.colors.text }]}>{maskedPrimarySecretKey}</Text>
+          </View>
+          <View style={styles.detailRow}>
+            <Text style={[styles.detailLabel, { color: theme.colors.textSecondary }]}>Passkey 2</Text>
+            <Text style={[styles.detailValue, { color: theme.colors.text }]}>{maskedSecondarySecretKey}</Text>
+          </View>
+          <PrimaryButton label="Gerenciar passkeys" onPress={handleManagePasskeys} variant="outline" />
           <PrimaryButton label="Trocar senha" onPress={handlePasswordReset} variant="outline" />
           <PrimaryButton label="Sair da conta" onPress={handleLogout} />
         </Card>

@@ -33,6 +33,7 @@ type FirestoreUserDoc = {
   name: string;
   email: string;
   secretKey: string | null;
+  secondarySecretKey?: string | null;
   phone?: string | null;
   recipientId?: string | null;
   createdAt?: Timestamp | string | null;
@@ -44,6 +45,7 @@ export type AuthUserProfile = {
   name: string;
   email: string;
   secretKey: string | null;
+  secondarySecretKey: string | null;
   phone?: string | null;
   recipientId?: string | null;
   createdAt?: string | null;
@@ -65,7 +67,11 @@ type AuthContextValue = {
   signUp: (payload: SignUpPayload) => Promise<void>;
   signOut: () => Promise<void>;
   requestPasswordReset: (email: string) => Promise<void>;
-  saveSecretKey: (secretKey: string, recipientId?: string | null) => Promise<void>;
+  saveSecretKeys: (payload: {
+    secretKey: string;
+    secondarySecretKey?: string;
+    recipientId?: string | null;
+  }) => Promise<void>;
   updateProfileDetails: (payload: { name?: string; email?: string; phone?: string }) => Promise<void>;
   refreshProfile: () => Promise<void>;
 };
@@ -87,6 +93,7 @@ const normalizeProfile = (data: FirestoreUserDoc): AuthUserProfile => ({
   name: data.name,
   email: data.email,
   secretKey: data.secretKey ?? null,
+  secondarySecretKey: data.secondarySecretKey ?? null,
   phone: data.phone ?? null,
   recipientId: data.recipientId ?? null,
   createdAt: normalizeTimestamp(data.createdAt),
@@ -144,6 +151,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
           name: fallbackName(overrides?.name ?? currentUser.displayName),
           email: currentUser.email ?? overrides?.email ?? '',
           secretKey: overrides?.secretKey ?? null,
+          secondarySecretKey: overrides?.secondarySecretKey ?? null,
           phone: overrides?.phone ?? null,
           recipientId: overrides?.recipientId ?? null,
           createdAt: serverTimestamp()
@@ -226,31 +234,47 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     }
   }, []);
 
-  const saveSecretKey = useCallback(async (secretKey: string, recipientId?: string | null) => {
-    if (!auth.currentUser) {
-      throw new Error('Nenhum usuario autenticado.');
-    }
-    const trimmed = secretKey.trim();
-    if (!trimmed) {
-      throw new Error('Informe uma Secret Key valida.');
-    }
-
-    try {
-      const ref = doc(db, 'users', auth.currentUser.uid);
-      const changes: Record<string, unknown> = {
-        secretKey: trimmed,
-        updatedAt: serverTimestamp()
-      };
-      if (typeof recipientId !== 'undefined') {
-        const normalizedRecipientId = recipientId && recipientId.trim().length > 0 ? recipientId.trim() : null;
-        changes.recipientId = normalizedRecipientId;
+  const saveSecretKeys = useCallback(
+    async ({
+      secretKey,
+      secondarySecretKey,
+      recipientId
+    }: {
+      secretKey: string;
+      secondarySecretKey?: string;
+      recipientId?: string | null;
+    }) => {
+      if (!auth.currentUser) {
+        throw new Error('Nenhum usuario autenticado.');
       }
-      await updateDoc(ref, changes);
-      await refreshProfile();
-    } catch (error) {
-      throw new Error(mapFirebaseError(error));
-    }
-  }, [refreshProfile]);
+      const primary = secretKey.trim();
+      if (!primary) {
+        throw new Error('Informe uma Passkey 1 valida.');
+      }
+
+      try {
+        const ref = doc(db, 'users', auth.currentUser.uid);
+        const changes: Record<string, unknown> = {
+          secretKey: primary,
+          updatedAt: serverTimestamp()
+        };
+        if (typeof secondarySecretKey !== 'undefined') {
+          const normalizedSecondary = secondarySecretKey.trim();
+          changes.secondarySecretKey = normalizedSecondary.length ? normalizedSecondary : null;
+        }
+        if (typeof recipientId !== 'undefined') {
+          const normalizedRecipientId =
+            recipientId && recipientId.trim().length > 0 ? recipientId.trim() : null;
+          changes.recipientId = normalizedRecipientId;
+        }
+        await updateDoc(ref, changes);
+        await refreshProfile();
+      } catch (error) {
+        throw new Error(mapFirebaseError(error));
+      }
+    },
+    [refreshProfile]
+  );
 
   const updateProfileDetails = useCallback(
     async ({ name, email, phone }: { name?: string; email?: string; phone?: string }) => {
@@ -307,7 +331,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       signUp,
       signOut,
       requestPasswordReset,
-      saveSecretKey,
+      saveSecretKeys,
       updateProfileDetails,
       refreshProfile
     }),
@@ -315,13 +339,13 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       isInitializing,
       isProfileReady,
       profile,
+      refreshProfile,
       requestPasswordReset,
-      saveSecretKey,
-      updateProfileDetails,
+      saveSecretKeys,
       signIn,
       signOut,
       signUp,
-      refreshProfile,
+      updateProfileDetails,
       user
     ]
   );

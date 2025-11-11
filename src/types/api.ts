@@ -1,3 +1,5 @@
+import type { DashboardId } from './dashboard';
+
 export type PeriodFilter = 'today' | '7d' | '30d' | '90d' | '1y' | 'custom';
 
 export type ApiError = {
@@ -108,4 +110,5 @@ export interface UserPreferencesResponse {
   language: string;
   notifications: NotificationPreferences;
   expoPushToken?: string | null;
+  selectedDashboardId?: DashboardId;
 }

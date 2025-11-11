@@ -15,12 +15,12 @@ import OrderListItem from '@/components/OrderListItem';
 import PeriodSelector from '@/components/PeriodFilter';
 import PrimaryButton from '@/components/PrimaryButton';
 import SectionTitle from '@/components/SectionTitle';
-import { useAuth } from '@/context/AuthContext';
 import { usePreferences } from '@/context/PreferencesContext';
 import { useApiRequest } from '@/hooks/useApiRequest';
 import { useToast } from '@/hooks/useToast';
 import { getTransactions } from '@/services/medusaApi';
 import { OrderSummary } from '@/types/api';
+import { useDashboard } from '@/hooks/useDashboard';
 
 const STATUS_OPTIONS = [
   { label: 'Todos', value: 'all' },
@@ -31,11 +31,9 @@ const STATUS_OPTIONS = [
 
 const OrdersScreen: React.FC = ({ navigation }: any) => {
   const { theme } = usePreferences();
-  const { profile } = useAuth();
+  const { definition, secretKey, apiOptions } = useDashboard();
   const { showToast } = useToast();
   const [status, setStatus] = useState<(typeof STATUS_OPTIONS)[number]['value']>('all');
-
-  const secretKey = profile?.secretKey;
 
   const mapStatusFilter = useCallback(
     (value: (typeof STATUS_OPTIONS)[number]['value']) => {
@@ -51,11 +49,17 @@ const OrdersScreen: React.FC = ({ navigation }: any) => {
   const fetchOrders = useCallback(
     () =>
       secretKey
-        ? getTransactions(secretKey, {
-            status: mapStatusFilter(status)
-          })
-        : Promise.reject(new Error('Secret Key nao configurada.')),
-    [mapStatusFilter, secretKey, status]
+        ? getTransactions(
+            secretKey,
+            {
+              status: mapStatusFilter(status)
+            },
+            apiOptions
+          )
+        : Promise.reject(
+            new Error(`Informe ${definition.passkeyLabel} para listar o ${definition.shortLabel}.`)
+          ),
+    [apiOptions, definition.passkeyLabel, definition.shortLabel, mapStatusFilter, secretKey, status]
   );
 
   const { data, isLoading, error, refetch } = useApiRequest<OrderSummary[]>(fetchOrders, [fetchOrders], {
@@ -97,6 +101,7 @@ const OrdersScreen: React.FC = ({ navigation }: any) => {
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <MedusaHeader
         title="Pedidos"
+        subtitle={definition.shortLabel}
         actions={[
           {
             icon: 'search-outline',

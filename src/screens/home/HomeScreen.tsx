@@ -24,6 +24,7 @@ import { usePreferences } from '@/context/PreferencesContext';
 import { useApiRequest } from '@/hooks/useApiRequest';
 import { useToast } from '@/hooks/useToast';
 import { getBalance, getTransactions } from '@/services/medusaApi';
+import { useDashboard } from '@/hooks/useDashboard';
 import { DashboardSummary, OrderSummary, PeriodFilter as PeriodFilterValue } from '@/types/api';
 import { formatCurrencyBRL, formatPercentage } from '@/utils/format';
 import { sumPaidNetAmount } from '@/utils/finance';
@@ -149,20 +150,20 @@ type DashboardData = DashboardSummary & {
 const HomeScreen: React.FC = ({ navigation }: any) => {
   const { theme } = usePreferences();
   const { profile } = useAuth();
+  const { definition, secretKey, apiOptions } = useDashboard();
   const { showToast } = useToast();
   const [period, setPeriod] = useState<PeriodFilterValue>('today');
   const [customRange, setCustomRange] = useState<{ start: Date; end: Date } | null>(null);
 
-  const secretKey = profile?.secretKey;
   const recipientId = profile?.recipientId ?? undefined;
 
   const fetchDashboard = useCallback(async () => {
     if (!secretKey) {
-      throw new Error('Secret Key nao configurada.');
+      throw new Error(`Informe ${definition.passkeyLabel} para acessar o ${definition.shortLabel}.`);
     }
     const [balance, transactions] = await Promise.all([
-      getBalance(secretKey, { recipientId }),
-      getTransactions(secretKey, { count: 100 })
+      getBalance(secretKey, { recipientId }, apiOptions),
+      getTransactions(secretKey, { count: 100 }, apiOptions)
     ]);
 
     const range = resolveRange(period, customRange);
@@ -194,7 +195,7 @@ const HomeScreen: React.FC = ({ navigation }: any) => {
       salesByMethod,
       dailySales
     } satisfies DashboardData;
-  }, [customRange, period, recipientId, secretKey]);
+  }, [apiOptions, customRange, definition.passkeyLabel, definition.shortLabel, period, recipientId, secretKey]);
 
   const { data, isLoading, error, refetch } = useApiRequest<DashboardData>(fetchDashboard, [fetchDashboard]);
 
@@ -235,7 +236,7 @@ const HomeScreen: React.FC = ({ navigation }: any) => {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <MedusaHeader />
+      <MedusaHeader title="Dashboard" subtitle={definition.shortLabel} />
 
       <ScrollView
         style={styles.flex}

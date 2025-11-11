@@ -10,6 +10,8 @@ import React, {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { STORAGE_KEYS } from '@/constants/storageKeys';
+import { DEFAULT_DASHBOARD_ID } from '@/constants/dashboards';
+import type { DashboardId } from '@/types/dashboard';
 import { getUserSettings, updateUserSettings } from '@/services/preferences';
 import { ApiError } from '@/types/api';
 import {
@@ -30,6 +32,7 @@ type PreferencesContextValue = {
   isLoading: boolean;
   isSyncing: boolean;
   setTheme: (mode: 'light' | 'dark') => void;
+  setDashboard: (dashboardId: DashboardId) => void;
   toggleNotification: (key: keyof NotificationPreferences) => void;
   toggleNotificationModel: (model: keyof NotificationPreferences['models']) => void;
   setNotifications: (notifications: NotificationPreferences) => void;
@@ -52,7 +55,8 @@ const defaultState: PreferencesState = {
   theme: 'light',
   language: 'pt-BR',
   notifications: defaultNotifications,
-  expoPushToken: null
+  expoPushToken: null,
+  selectedDashboardId: DEFAULT_DASHBOARD_ID
 };
 
 const PreferencesContext = createContext<PreferencesContextValue | undefined>(undefined);
@@ -206,6 +210,16 @@ export const PreferencesProvider: React.FC<React.PropsWithChildren> = ({ childre
     [applyPreferences]
   );
 
+  const setDashboard = useCallback(
+    (dashboardId: DashboardId) => {
+      applyPreferences((current) => ({
+        ...current,
+        selectedDashboardId: dashboardId
+      }));
+    },
+    [applyPreferences]
+  );
+
   const toggleNotification = useCallback(
     (key: keyof NotificationPreferences) => {
       applyPreferences((current) => ({
@@ -282,6 +296,7 @@ export const PreferencesProvider: React.FC<React.PropsWithChildren> = ({ childre
       isLoading,
       isSyncing,
       setTheme,
+      setDashboard,
       toggleNotification,
       toggleNotificationModel,
       setNotifications,
@@ -296,6 +311,7 @@ export const PreferencesProvider: React.FC<React.PropsWithChildren> = ({ childre
       refreshFromServer,
       refreshPushToken,
       setTheme,
+      setDashboard,
       theme,
       toggleNotification,
       toggleNotificationModel,

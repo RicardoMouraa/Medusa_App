@@ -1,5 +1,7 @@
-import React, { useCallback } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useMemo } from 'react';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 
 import Card from '@/components/Card';
 import SectionTitle from '@/components/SectionTitle';
@@ -8,11 +10,26 @@ import MedusaHeader from '@/components/MedusaHeader';
 import PrimaryButton from '@/components/PrimaryButton';
 import { usePreferences } from '@/context/PreferencesContext';
 import { useToast } from '@/hooks/useToast';
+import { useDashboard, getAvailableDashboards } from '@/hooks/useDashboard';
+import type { DashboardId } from '@/types/dashboard';
+import { useAuth } from '@/context/AuthContext';
 
 const SettingsScreen: React.FC = () => {
-  const { preferences, setTheme, toggleNotification, toggleNotificationModel, refreshFromServer, refreshPushToken } =
-    usePreferences();
+  const {
+    preferences,
+    theme,
+    setTheme,
+    toggleNotification,
+    toggleNotificationModel,
+    refreshFromServer,
+    refreshPushToken,
+    setDashboard
+  } = usePreferences();
+  const navigation = useNavigation<any>();
+  const { profile } = useAuth();
+  const { definition, selectedDashboardId } = useDashboard();
   const { showToast } = useToast();
+  const dashboards = useMemo(() => getAvailableDashboards(), []);
 
   const handleThemeToggle = useCallback(
     (value: boolean) => {
@@ -39,6 +56,26 @@ const SettingsScreen: React.FC = () => {
     [preferences.notifications.models, showToast, toggleNotificationModel]
   );
 
+  const handleDashboardSelect = useCallback(
+    (dashboardId: DashboardId, passkeyField: 'secretKey' | 'secondarySecretKey') => {
+      if (passkeyField === 'secondarySecretKey' && !profile?.secondarySecretKey) {
+        showToast({
+          type: 'info',
+          text1: 'Configure a Passkey 2',
+          text2: 'Adicione a segunda chave na tela de passkeys para liberar o Dashboard 2.'
+        });
+        navigation.navigate('SecretKey' as never);
+        return;
+      }
+      setDashboard(dashboardId);
+    },
+    [navigation, profile?.secondarySecretKey, setDashboard, showToast]
+  );
+
+  const handleManagePasskeys = useCallback(() => {
+    navigation.navigate('SecretKey' as never);
+  }, [navigation]);
+
   const handleForceSync = useCallback(async () => {
     await refreshFromServer();
     showToast({
@@ -60,7 +97,7 @@ const SettingsScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <MedusaHeader title="Configurações" />
+      <MedusaHeader title="Configurações" subtitle={definition.shortLabel} />
       <ScrollView contentContainerStyle={styles.content}>
         <Card style={styles.section}>
           <SectionTitle title="Notificações" />
@@ -121,6 +158,48 @@ const SettingsScreen: React.FC = () => {
           />
         </Card>
 
+
+        <Card style={styles.section}>
+          <SectionTitle title="Dashboards" caption="Selecione qual API deseja visualizar" />
+          {dashboards.map((dashboard) => {
+            const isActive = dashboard.id === selectedDashboardId;
+            const requiresSecondary = dashboard.passkeyField === 'secondarySecretKey';
+            const isLocked = requiresSecondary && !profile?.secondarySecretKey;
+            return (
+              <TouchableOpacity
+                key={dashboard.id}
+                style={[
+                  styles.dashboardRow,
+                  {
+                    borderColor: isActive ? theme.colors.primary : theme.colors.border,
+                    backgroundColor: isActive ? 'rgba(5,166,96,0.08)' : 'transparent'
+                  }
+                ]}
+                onPress={() => handleDashboardSelect(dashboard.id as DashboardId, dashboard.passkeyField)}
+                disabled={isActive}
+              >
+                <View style={styles.dashboardInfo}>
+                  <Text style={[styles.dashboardLabel, { color: theme.colors.text }]}>{dashboard.label}</Text>
+                  <Text style={[styles.dashboardDescription, { color: theme.colors.textSecondary }]}>
+                    {requiresSecondary ? 'Usa Passkey 2' : 'Usa Passkey 1'}
+                  </Text>
+                  {isLocked ? (
+                    <Text style={[styles.dashboardWarning, { color: theme.colors.danger }]}>Configure a Passkey 2 para liberar.</Text>
+                  ) : null}
+                </View>
+                {isActive ? (
+                  <Ionicons name="checkmark-circle" size={20} color={theme.colors.primary} />
+                ) : isLocked ? (
+                  <Ionicons name="lock-closed" size={18} color={theme.colors.textSecondary} />
+                ) : (
+                  <Ionicons name="ellipse-outline" size={18} color={theme.colors.textSecondary} />
+                )}
+              </TouchableOpacity>
+            );
+          })}
+          <PrimaryButton label="Gerenciar passkeys" onPress={handleManagePasskeys} variant="outline" />
+        </Card>
+
         <PrimaryButton label="Sincronizar com o painel" onPress={handleForceSync} variant="outline" />
         <PrimaryButton label="Atualizar push notifications" onPress={handlePushRegistration} variant="outline" />
       </ScrollView>
@@ -151,6 +230,31 @@ const styles = StyleSheet.create({
   staticCaption: {
     fontSize: 13,
     color: '#7A7A7A'
+  },
+  dashboardRow: {
+    marginTop: 12,
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between'
+  },
+  dashboardInfo: {
+    flex: 1,
+    marginRight: 12
+  },
+  dashboardLabel: {
+    fontSize: 15,
+    fontWeight: '700'
+  },
+  dashboardDescription: {
+    fontSize: 13,
+    marginTop: 2
+  },
+  dashboardWarning: {
+    fontSize: 12,
+    marginTop: 4
   }
 });
 

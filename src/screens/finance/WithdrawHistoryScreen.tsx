@@ -32,8 +32,6 @@ import PrimaryButton from '@/components/PrimaryButton';
 
 import WithdrawHistoryListItem from '@/components/WithdrawHistoryItem';
 
-import { useAuth } from '@/context/AuthContext';
-
 import { usePreferences } from '@/context/PreferencesContext';
 
 import { useApiRequest } from '@/hooks/useApiRequest';
@@ -43,6 +41,8 @@ import { useToast } from '@/hooks/useToast';
 import { getTransfers } from '@/services/medusaApi';
 
 import { WithdrawHistoryItem } from '@/types/api';
+
+import { useDashboard } from '@/hooks/useDashboard';
 
 
 
@@ -58,19 +58,22 @@ const WithdrawHistoryScreen: React.FC<WithdrawHistoryScreenProps> = ({ navigatio
 
   const { theme } = usePreferences();
 
-  const { profile } = useAuth();
+  const { definition, secretKey, apiOptions } = useDashboard();
 
   const { showToast } = useToast();
-
-  const secretKey = profile?.secretKey;
 
 
 
   const fetchHistory = useCallback(
 
-    () => (secretKey ? getTransfers(secretKey) : Promise.reject(new Error('Secret Key nao configurada.'))),
+    () =>
+      secretKey
+        ? getTransfers(secretKey, apiOptions)
+        : Promise.reject(
+            new Error(`Informe ${definition.passkeyLabel} para ver o historico do ${definition.shortLabel}.`)
+          ),
 
-    [secretKey]
+    [apiOptions, definition.passkeyLabel, definition.shortLabel, secretKey]
 
   );
 

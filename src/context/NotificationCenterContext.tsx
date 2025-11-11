@@ -1,12 +1,12 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { useAuth } from '@/context/AuthContext';
-import { getTransactions } from '@/services/medusaApi';
 import { ApiError, OrderSummary } from '@/types/api';
 import { sendLocalNotification } from '@/services/notifications';
+import { useDashboard } from '@/hooks/useDashboard';
+import { getTransactions } from '@/services/medusaApi';
 
-const STORAGE_KEY = '@medusa_read_notifications_v1';
+const STORAGE_KEY_PREFIX = '@medusa_read_notifications_v1';
 const DEFAULT_POLL_INTERVAL_MS = 20000;
 const RATE_LIMIT_BACKOFF_MS = 120000;
 const MAX_POLL_INTERVAL_MS = 5 * 60 * 1000;
@@ -30,34 +30,36 @@ type NotificationCenterValue = {
 const NotificationCenterContext = createContext<NotificationCenterValue | undefined>(undefined);
 
 export const NotificationCenterProvider: React.FC<React.PropsWithChildren> = ({ children }) => {
-  const { profile } = useAuth();
+  const { secretKey, apiOptions, selectedDashboardId } = useDashboard();
   const [notifications, setNotifications] = useState<SaleNotification[]>([]);
   const [readIds, setReadIds] = useState<Set<string>>(new Set());
   const seenIdsRef = useRef<Set<string>>(new Set());
   const initialLoadRef = useRef(true);
 
+  const storageKey = `${STORAGE_KEY_PREFIX}:${selectedDashboardId}`;
+
   useEffect(() => {
     const loadReadIds = async () => {
       try {
-        const stored = await AsyncStorage.getItem(STORAGE_KEY);
-        if (stored) {
-          const parsed = JSON.parse(stored) as string[];
-          setReadIds(new Set(parsed));
-        }
+        const stored = await AsyncStorage.getItem(storageKey);
+        setReadIds(stored ? new Set(JSON.parse(stored) as string[]) : new Set());
       } catch (error) {
         console.warn('[NotificationCenter] Failed to load read ids', error);
       }
     };
     void loadReadIds();
-  }, []);
+  }, [storageKey]);
 
-  const persistReadIds = useCallback(async (ids: Set<string>) => {
-    try {
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(ids)));
-    } catch (error) {
-      console.warn('[NotificationCenter] Failed to persist read ids', error);
-    }
-  }, []);
+  const persistReadIds = useCallback(
+    async (ids: Set<string>) => {
+      try {
+        await AsyncStorage.setItem(storageKey, JSON.stringify(Array.from(ids)));
+      } catch (error) {
+        console.warn('[NotificationCenter] Failed to persist read ids', error);
+      }
+    },
+    [storageKey]
+  );
 
   const syncNotifications = useCallback(
     (data: OrderSummary[]) => {
@@ -101,7 +103,6 @@ export const NotificationCenterProvider: React.FC<React.PropsWithChildren> = ({ 
   );
 
   useEffect(() => {
-    const secretKey = profile?.secretKey;
     if (!secretKey) {
       setNotifications([]);
       seenIdsRef.current.clear();
@@ -130,7 +131,7 @@ export const NotificationCenterProvider: React.FC<React.PropsWithChildren> = ({ 
       if (cancelled || inFlight) return;
       inFlight = true;
       try {
-        const data = await getTransactions(secretKey, { count: 20 });
+        const data = await getTransactions(secretKey, { count: 20 }, apiOptions);
         if (!cancelled) {
           syncNotifications(data);
         }
@@ -163,7 +164,7 @@ export const NotificationCenterProvider: React.FC<React.PropsWithChildren> = ({ 
         clearTimeout(timeout);
       }
     };
-  }, [profile?.secretKey, syncNotifications]);
+  }, [apiOptions, secretKey, selectedDashboardId, syncNotifications]);
 
   const markNotificationAsRead = useCallback(
     (id: string) => {

@@ -45,14 +45,24 @@ type RequestOptions = {
   query?: QueryParams;
 };
 
-const buildUrl = (path: string, query?: QueryParams) => {
-  if (!query) return `${BASE_URL}${path}`;
+type ClientOptions = {
+  baseUrl?: string;
+};
+
+const normalizeBaseUrl = (baseUrl?: string) => {
+  const target = baseUrl ?? BASE_URL;
+  return target.endsWith('/') ? target.slice(0, -1) : target;
+};
+
+const buildUrl = (path: string, query?: QueryParams, baseUrl?: string) => {
+  const normalizedBase = normalizeBaseUrl(baseUrl);
+  if (!query) return `${normalizedBase}${path}`;
   const searchParams = Object.entries(query).reduce<string[]>((acc, [key, value]) => {
     if (value === undefined || value === null || value === '') return acc;
     acc.push(`${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`);
     return acc;
   }, []);
-  return `${BASE_URL}${path}${searchParams.length ? `?${searchParams.join('&')}` : ''}`;
+  return `${normalizedBase}${path}${searchParams.length ? `?${searchParams.join('&')}` : ''}`;
 };
 
 const buildAuthHeader = (secretKey: string) => `Basic ${base64Encode(`${secretKey}:x`)}`;
@@ -370,8 +380,12 @@ const handleErrorResponse = async (response: Response): Promise<ApiError> => {
   };
 };
 
-const request = async <T>(path: string, secretKey: string, options?: RequestOptions): Promise<T> => {
-  const url = buildUrl(path, options?.query);
+const request = async <T>(
+  path: string,
+  secretKey: string,
+  options?: RequestOptions & ClientOptions
+): Promise<T> => {
+  const url = buildUrl(path, options?.query, options?.baseUrl);
   const headers: Record<string, string> = {
     Authorization: buildAuthHeader(secretKey),
     Accept: 'application/json'
@@ -411,13 +425,15 @@ const request = async <T>(path: string, secretKey: string, options?: RequestOpti
 
 export const getBalance = async (
   secretKey: string,
-  options?: { recipientId?: string | number | null }
+  params?: { recipientId?: string | number | null },
+  options?: ClientOptions
 ): Promise<BalanceResponse> => {
   const hasRecipient =
-    options?.recipientId !== undefined && options?.recipientId !== null && options?.recipientId !== '';
+    params?.recipientId !== undefined && params?.recipientId !== null && params?.recipientId !== '';
 
   const payload = await request<Record<string, unknown>>('/balance/available', secretKey, {
-    query: hasRecipient ? { recipientId: options?.recipientId } : undefined
+    query: hasRecipient ? { recipientId: params?.recipientId } : undefined,
+    baseUrl: options?.baseUrl
   });
 
   const available = pickMoney(
@@ -485,7 +501,8 @@ export const getBalance = async (
 
 export const getTransactions = async (
   secretKey: string,
-  params?: QueryParams
+  params?: QueryParams,
+  options?: ClientOptions
 ): Promise<OrderSummary[]> => {
   const query: QueryParams = {
     page: 1,
@@ -495,7 +512,8 @@ export const getTransactions = async (
   };
 
   const response = await request<unknown>('/transactions', secretKey, {
-    query
+    query,
+    baseUrl: options?.baseUrl
   });
   const transactions = extractArray(response);
   return transactions.map((transaction) => {
@@ -505,21 +523,33 @@ export const getTransactions = async (
   });
 };
 
-export const getTransactionById = async (secretKey: string, transactionId: string) => {
-  const payload = await request<unknown>(`/transactions/${transactionId}`, secretKey);
+export const getTransactionById = async (
+  secretKey: string,
+  transactionId: string,
+  options?: ClientOptions
+) => {
+  const payload = await request<unknown>(`/transactions/${transactionId}`, secretKey, {
+    baseUrl: options?.baseUrl
+  });
   return mapTransactionToOrder(unwrapTransaction(payload));
 };
 
-export const getCompany = async (secretKey: string) => {
-  return request<Record<string, unknown>>('/company', secretKey);
+export const getCompany = async (secretKey: string, options?: ClientOptions) => {
+  return request<Record<string, unknown>>('/company', secretKey, {
+    baseUrl: options?.baseUrl
+  });
 };
 
-export const getRecipients = async (secretKey: string) => {
-  return request<Record<string, unknown>>('/recipients', secretKey);
+export const getRecipients = async (secretKey: string, options?: ClientOptions) => {
+  return request<Record<string, unknown>>('/recipients', secretKey, {
+    baseUrl: options?.baseUrl
+  });
 };
 
-export const getCustomers = async (secretKey: string) => {
-  return request<Record<string, unknown>>('/customers', secretKey);
+export const getCustomers = async (secretKey: string, options?: ClientOptions) => {
+  return request<Record<string, unknown>>('/customers', secretKey, {
+    baseUrl: options?.baseUrl
+  });
 };
 
 const normalizePixKeyType = (value?: string) => {
@@ -542,7 +572,8 @@ export const createTransfer = async (
     pixKeyType?: string;
     recipientId?: number;
     postbackUrl?: string;
-  }
+  },
+  options?: ClientOptions
 ) => {
   return request<Record<string, unknown>>('/transfers', secretKey, {
     method: 'POST',
@@ -552,12 +583,18 @@ export const createTransfer = async (
       pixKeyType: normalizePixKeyType(payload.pixKeyType),
       recipientId: payload.recipientId,
       postbackUrl: payload.postbackUrl
-    }
+    },
+    baseUrl: options?.baseUrl
   });
 };
 
-export const getTransfers = async (secretKey: string): Promise<WithdrawHistoryItem[]> => {
-  const response = await request<unknown>('/transfers', secretKey);
+export const getTransfers = async (
+  secretKey: string,
+  options?: ClientOptions
+): Promise<WithdrawHistoryItem[]> => {
+  const response = await request<unknown>('/transfers', secretKey, {
+    baseUrl: options?.baseUrl
+  });
   const transfers = extractArray(response);
 
   return transfers.map((transfer) => ({

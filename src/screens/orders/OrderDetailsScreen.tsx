@@ -6,7 +6,6 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import Card from '@/components/Card';
 import SectionTitle from '@/components/SectionTitle';
 import StatusBadge from '@/components/StatusBadge';
-import { useAuth } from '@/context/AuthContext';
 import { usePreferences } from '@/context/PreferencesContext';
 import { useApiRequest } from '@/hooks/useApiRequest';
 import { useToast } from '@/hooks/useToast';
@@ -14,6 +13,7 @@ import { getTransactionById } from '@/services/medusaApi';
 import { OrderDetail } from '@/types/api';
 import { formatCurrencyBRL, formatDayAndTime } from '@/utils/format';
 import { calculateNetAmount, RESERVE_PERCENTAGE } from '@/utils/finance';
+import { useDashboard } from '@/hooks/useDashboard';
 
 const RESERVE_LABEL = `Reserva financeira (${(RESERVE_PERCENTAGE * 100).toFixed(2)}%)`;
 const INTERMEDIATION_LABEL = 'Taxa de intermediação (5,99% + R$ 3,99)';
@@ -31,15 +31,19 @@ type OrderDetailsScreenProps = {
 
 const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({ route, navigation }) => {
   const { theme } = usePreferences();
-  const { profile } = useAuth();
+  const { definition, secretKey, apiOptions } = useDashboard();
   const { showToast } = useToast();
   const { orderId } = route.params;
-  const secretKey = profile?.secretKey;
   const insets = useSafeAreaInsets();
 
   const { data, isLoading, error, refetch } = useApiRequest<OrderDetail>(
-    () => (secretKey ? getTransactionById(secretKey, orderId) : Promise.reject(new Error('Secret Key nao configurada.'))),
-    [orderId, secretKey]
+    () =>
+      secretKey
+        ? getTransactionById(secretKey, orderId, apiOptions)
+        : Promise.reject(
+            new Error(`Informe ${definition.passkeyLabel} para abrir pedidos no ${definition.shortLabel}.`)
+          ),
+    [apiOptions, definition.passkeyLabel, definition.shortLabel, orderId, secretKey]
   );
 
   const feeSummary = useMemo(() => (data ? calculateNetAmount(data.amount) : null), [data?.amount]);

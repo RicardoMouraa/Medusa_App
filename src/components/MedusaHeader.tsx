@@ -14,6 +14,7 @@ import { useNavigation } from '@react-navigation/native';
 
 import { useAuth } from '@/context/AuthContext';
 import { usePreferences } from '@/context/PreferencesContext';
+import { useDashboard } from '@/hooks/useDashboard';
 import { useToast } from '@/hooks/useToast';
 import { useNotificationCenter } from '@/context/NotificationCenterContext';
 import { formatCurrencyBRL, formatDayAndTime } from '@/utils/format';
@@ -41,6 +42,7 @@ const MedusaHeader: React.FC<MedusaHeaderProps> = ({
 }) => {
   const { theme } = usePreferences();
   const { profile, requestPasswordReset, signOut } = useAuth();
+  const { secretKey: activeSecretKey } = useDashboard();
   const navigation = useNavigation<any>();
   const { showToast } = useToast();
   const insets = useSafeAreaInsets();
@@ -124,16 +126,16 @@ const MedusaHeader: React.FC<MedusaHeaderProps> = ({
   };
 
   const handleNotificationsPress = useCallback(() => {
-    if (!profile?.secretKey) {
+    if (!activeSecretKey) {
       showToast({
         type: 'info',
-        text1: 'Configure sua Secret Key',
-        text2: 'Informe a chave para receber alertas de venda.'
+        text1: 'Configurar Passkey',
+        text2: 'Informe a chave do dashboard selecionado para receber alertas.'
       });
       return;
     }
     setNotificationsVisible(true);
-  }, [profile?.secretKey, showToast]);
+  }, [activeSecretKey, showToast]);
 
   const menuItems = [
     {
