@@ -8,6 +8,7 @@ import SectionTitle from '@/components/SectionTitle';
 import ToggleRow from '@/components/ToggleRow';
 import MedusaHeader from '@/components/MedusaHeader';
 import PrimaryButton from '@/components/PrimaryButton';
+import TextField from '@/components/TextField';
 import { usePreferences } from '@/context/PreferencesContext';
 import { useToast } from '@/hooks/useToast';
 import { useDashboard, getAvailableDashboards } from '@/hooks/useDashboard';
@@ -23,13 +24,15 @@ const SettingsScreen: React.FC = () => {
     toggleNotificationModel,
     refreshFromServer,
     refreshPushToken,
-    setDashboard
+    setDashboard,
+    setDashboardAlias
   } = usePreferences();
   const navigation = useNavigation<any>();
   const { profile } = useAuth();
-  const { definition, selectedDashboardId } = useDashboard();
+  const { definition, selectedDashboardId, displayLabel } = useDashboard();
   const { showToast } = useToast();
   const dashboards = useMemo(() => getAvailableDashboards(), []);
+  const dashboardAliases = preferences.dashboardAliases ?? {};
 
   const handleThemeToggle = useCallback(
     (value: boolean) => {
@@ -97,7 +100,7 @@ const SettingsScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <MedusaHeader title="Configurações" subtitle={definition.shortLabel} />
+      <MedusaHeader title="Configurações" subtitle={displayLabel} />
       <ScrollView contentContainerStyle={styles.content}>
         <Card style={styles.section}>
           <SectionTitle title="Notificações" />
@@ -165,36 +168,48 @@ const SettingsScreen: React.FC = () => {
             const isActive = dashboard.id === selectedDashboardId;
             const requiresSecondary = dashboard.passkeyField === 'secondarySecretKey';
             const isLocked = requiresSecondary && !profile?.secondarySecretKey;
+            const aliasValue = dashboardAliases[dashboard.id] ?? '';
+            const resolvedLabel = aliasValue.trim().length ? aliasValue.trim() : dashboard.label;
             return (
-              <TouchableOpacity
-                key={dashboard.id}
-                style={[
-                  styles.dashboardRow,
-                  {
-                    borderColor: isActive ? theme.colors.primary : theme.colors.border,
-                    backgroundColor: isActive ? 'rgba(5,166,96,0.08)' : 'transparent'
-                  }
-                ]}
-                onPress={() => handleDashboardSelect(dashboard.id as DashboardId, dashboard.passkeyField)}
-                disabled={isActive}
-              >
-                <View style={styles.dashboardInfo}>
-                  <Text style={[styles.dashboardLabel, { color: theme.colors.text }]}>{dashboard.label}</Text>
-                  <Text style={[styles.dashboardDescription, { color: theme.colors.textSecondary }]}>
-                    {requiresSecondary ? 'Usa Passkey 2' : 'Usa Passkey 1'}
-                  </Text>
-                  {isLocked ? (
-                    <Text style={[styles.dashboardWarning, { color: theme.colors.danger }]}>Configure a Passkey 2 para liberar.</Text>
-                  ) : null}
-                </View>
-                {isActive ? (
-                  <Ionicons name="checkmark-circle" size={20} color={theme.colors.primary} />
-                ) : isLocked ? (
-                  <Ionicons name="lock-closed" size={18} color={theme.colors.textSecondary} />
-                ) : (
-                  <Ionicons name="ellipse-outline" size={18} color={theme.colors.textSecondary} />
-                )}
-              </TouchableOpacity>
+              <View key={dashboard.id} style={styles.dashboardGroup}>
+                <TouchableOpacity
+                  style={[
+                    styles.dashboardRow,
+                    {
+                      borderColor: isActive ? theme.colors.primary : theme.colors.border,
+                      backgroundColor: isActive ? 'rgba(5,166,96,0.08)' : 'transparent'
+                    }
+                  ]}
+                  onPress={() => handleDashboardSelect(dashboard.id as DashboardId, dashboard.passkeyField)}
+                  disabled={isActive}
+                >
+                  <View style={styles.dashboardInfo}>
+                    <Text style={[styles.dashboardLabel, { color: theme.colors.text }]}>{resolvedLabel}</Text>
+                    <Text style={[styles.dashboardDescription, { color: theme.colors.textSecondary }]}>
+                      {requiresSecondary ? 'Usa Passkey 2' : 'Usa Passkey 1'}
+                    </Text>
+                    {isLocked ? (
+                      <Text style={[styles.dashboardWarning, { color: theme.colors.danger }]}>
+                        Configure a Passkey 2 para liberar.
+                      </Text>
+                    ) : null}
+                  </View>
+                  {isActive ? (
+                    <Ionicons name="checkmark-circle" size={20} color={theme.colors.primary} />
+                  ) : isLocked ? (
+                    <Ionicons name="lock-closed" size={18} color={theme.colors.textSecondary} />
+                  ) : (
+                    <Ionicons name="ellipse-outline" size={18} color={theme.colors.textSecondary} />
+                  )}
+                </TouchableOpacity>
+                <TextField
+                  label="Nome personalizado"
+                  placeholder={`ex: ${dashboard.shortLabel}`}
+                  value={aliasValue}
+                  onChangeText={(value) => setDashboardAlias(dashboard.id as DashboardId, value)}
+                  containerStyle={styles.dashboardAliasField}
+                />
+              </View>
             );
           })}
           <PrimaryButton label="Gerenciar passkeys" onPress={handleManagePasskeys} variant="outline" />
@@ -231,8 +246,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#7A7A7A'
   },
-  dashboardRow: {
+  dashboardGroup: {
     marginTop: 12,
+    gap: 8
+  },
+  dashboardRow: {
     padding: 16,
     borderRadius: 16,
     borderWidth: 1,
@@ -254,6 +272,9 @@ const styles = StyleSheet.create({
   },
   dashboardWarning: {
     fontSize: 12,
+    marginTop: 4
+  },
+  dashboardAliasField: {
     marginTop: 4
   }
 });

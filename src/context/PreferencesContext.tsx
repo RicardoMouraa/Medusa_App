@@ -33,6 +33,7 @@ type PreferencesContextValue = {
   isSyncing: boolean;
   setTheme: (mode: 'light' | 'dark') => void;
   setDashboard: (dashboardId: DashboardId) => void;
+  setDashboardAlias: (dashboardId: DashboardId, name: string) => void;
   toggleNotification: (key: keyof NotificationPreferences) => void;
   toggleNotificationModel: (model: keyof NotificationPreferences['models']) => void;
   setNotifications: (notifications: NotificationPreferences) => void;
@@ -56,7 +57,8 @@ const defaultState: PreferencesState = {
   language: 'pt-BR',
   notifications: defaultNotifications,
   expoPushToken: null,
-  selectedDashboardId: DEFAULT_DASHBOARD_ID
+  selectedDashboardId: DEFAULT_DASHBOARD_ID,
+  dashboardAliases: {}
 };
 
 const PreferencesContext = createContext<PreferencesContextValue | undefined>(undefined);
@@ -73,6 +75,10 @@ const mergePreferences = (base: PreferencesState, incoming?: Partial<Preferences
         ...base.notifications.models,
         ...(incoming.notifications?.models ?? {})
       }
+    },
+    dashboardAliases: {
+      ...(base.dashboardAliases ?? {}),
+      ...(incoming.dashboardAliases ?? {})
     }
   };
 };
@@ -220,6 +226,26 @@ export const PreferencesProvider: React.FC<React.PropsWithChildren> = ({ childre
     [applyPreferences]
   );
 
+  const setDashboardAlias = useCallback(
+    (dashboardId: DashboardId, name: string) => {
+      const trimmed = name.trim();
+      applyPreferences((current) => {
+        const currentAliases = current.dashboardAliases ?? {};
+        const nextAliases = { ...currentAliases };
+        if (!trimmed) {
+          delete nextAliases[dashboardId];
+        } else {
+          nextAliases[dashboardId] = trimmed;
+        }
+        return {
+          ...current,
+          dashboardAliases: nextAliases
+        };
+      });
+    },
+    [applyPreferences]
+  );
+
   const toggleNotification = useCallback(
     (key: keyof NotificationPreferences) => {
       applyPreferences((current) => ({
@@ -297,6 +323,7 @@ export const PreferencesProvider: React.FC<React.PropsWithChildren> = ({ childre
       isSyncing,
       setTheme,
       setDashboard,
+      setDashboardAlias,
       toggleNotification,
       toggleNotificationModel,
       setNotifications,
@@ -312,6 +339,7 @@ export const PreferencesProvider: React.FC<React.PropsWithChildren> = ({ childre
       refreshPushToken,
       setTheme,
       setDashboard,
+      setDashboardAlias,
       theme,
       toggleNotification,
       toggleNotificationModel,

@@ -31,7 +31,7 @@ type OrderDetailsScreenProps = {
 
 const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({ route, navigation }) => {
   const { theme } = usePreferences();
-  const { definition, secretKey, apiOptions } = useDashboard();
+  const { definition, secretKey, apiOptions, displayLabel } = useDashboard();
   const { showToast } = useToast();
   const { orderId } = route.params;
   const insets = useSafeAreaInsets();
@@ -41,9 +41,9 @@ const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({ route, navigati
       secretKey
         ? getTransactionById(secretKey, orderId, apiOptions)
         : Promise.reject(
-            new Error(`Informe ${definition.passkeyLabel} para abrir pedidos no ${definition.shortLabel}.`)
+            new Error(`Informe ${definition.passkeyLabel} para abrir pedidos no ${displayLabel}.`)
           ),
-    [apiOptions, definition.passkeyLabel, definition.shortLabel, orderId, secretKey]
+    [apiOptions, definition.passkeyLabel, displayLabel, orderId, secretKey]
   );
 
   const feeSummary = useMemo(() => (data ? calculateNetAmount(data.amount) : null), [data?.amount]);

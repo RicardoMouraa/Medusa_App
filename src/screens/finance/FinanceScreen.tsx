@@ -43,7 +43,7 @@ type FinanceData = {
 const FinanceScreen: React.FC = ({ navigation }: any) => {
   const { theme } = usePreferences();
   const { profile } = useAuth();
-  const { definition, secretKey, apiOptions } = useDashboard();
+  const { definition, secretKey, apiOptions, displayLabel } = useDashboard();
   const { showToast } = useToast();
 
   const [selectedType, setSelectedType] = useState<(typeof PIX_KEY_TYPES)[number]>('CPF');
@@ -61,9 +61,9 @@ const FinanceScreen: React.FC = ({ navigation }: any) => {
             getTransactions(secretKey, { count: 100 }, apiOptions)
           ]).then(([balance, transactions]) => ({ balance, transactions }))
         : Promise.reject(
-            new Error(`Informe ${definition.passkeyLabel} para acessar o ${definition.shortLabel}.`)
+            new Error(`Informe ${definition.passkeyLabel} para acessar o ${displayLabel}.`)
           ),
-    [apiOptions, definition.passkeyLabel, definition.shortLabel, recipientId, secretKey]
+    [apiOptions, definition.passkeyLabel, displayLabel, recipientId, secretKey]
   );
 
   const {
@@ -148,7 +148,7 @@ const FinanceScreen: React.FC = ({ navigation }: any) => {
       setIsSubmitting(true);
 
       if (!secretKey) {
-        throw new Error(`Informe ${definition.passkeyLabel} para solicitar saques no ${definition.shortLabel}.`);
+        throw new Error(`Informe ${definition.passkeyLabel} para solicitar saques no ${displayLabel}.`);
       }
 
       const amountInCents = Math.round(payload.amount * 100);
@@ -183,17 +183,7 @@ const FinanceScreen: React.FC = ({ navigation }: any) => {
     } finally {
       setIsSubmitting(false);
     }
-  }, [
-    apiOptions,
-    definition.passkeyLabel,
-    definition.shortLabel,
-    payload,
-    recipientId,
-    refetch,
-    secretKey,
-    showToast,
-    validate
-  ]);
+  }, [apiOptions, definition.passkeyLabel, displayLabel, payload, recipientId, refetch, secretKey, showToast, validate]);
 
 
 
@@ -214,7 +204,7 @@ const FinanceScreen: React.FC = ({ navigation }: any) => {
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <MedusaHeader
         title="Financeiro"
-        subtitle={definition.shortLabel}
+        subtitle={displayLabel}
         actions={[
           {
             icon: 'refresh',
@@ -329,8 +319,9 @@ const styles = StyleSheet.create({
     flex: 1
   },
   content: {
-    padding: 20,
-    gap: 20,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    gap: 24,
     paddingBottom: 120
   },
   balanceCard: {

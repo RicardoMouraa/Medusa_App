@@ -2,6 +2,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import {
   Image,
   Modal,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -267,9 +268,16 @@ const MedusaHeader: React.FC<MedusaHeaderProps> = ({
                     <View style={styles.menuOverlay} />
                   </TouchableWithoutFeedback>
                   <View style={[styles.notificationsContainer, { paddingTop: insets.top + 70 }]}>
-                    <View style={[styles.notificationsCard, { backgroundColor: theme.colors.surface }]}>
+                    <View
+                      style={[
+                        styles.notificationsCard,
+                        { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }
+                      ]}
+                    >
                       <View style={styles.notificationsHeader}>
-                        <Text style={[styles.menuTitle, { color: theme.colors.text }]}>Central de notificacoes</Text>
+                        <Text style={[styles.notificationsTitle, { color: theme.colors.text }]}>
+                          Central de notificacoes
+                        </Text>
                         {notifications.length ? (
                           <TouchableOpacity onPress={markAllAsRead}>
                             <Text style={[styles.markAllButton, { color: theme.colors.primary }]}>
@@ -279,37 +287,45 @@ const MedusaHeader: React.FC<MedusaHeaderProps> = ({
                         ) : null}
                       </View>
                       {latestNotifications.length === 0 ? (
-                        <Text style={[styles.menuSubtitle, { color: theme.colors.textSecondary }]}>
+                        <Text style={[styles.notificationsEmpty, { color: theme.colors.textSecondary }]}>
                           Nenhuma venda recente encontrada.
                         </Text>
                       ) : (
-                        latestNotifications.map((notification) => (
-                          <View
-                            key={notification.id}
-                            style={[
-                              styles.notificationItem,
-                              notification.isRead && { opacity: 0.6 }
-                            ]}
-                          >
-                            <View style={[styles.notificationIcon, { backgroundColor: `${theme.colors.primary}1A` }]}>
-                              <Ionicons name="trending-up" size={16} color={theme.colors.primary} />
+                        <ScrollView
+                          style={styles.notificationsList}
+                          contentContainerStyle={styles.notificationsListContent}
+                          showsVerticalScrollIndicator={false}
+                        >
+                          {latestNotifications.map((notification) => (
+                            <View
+                              key={notification.id}
+                              style={[
+                                styles.notificationItem,
+                                notification.isRead && { opacity: 0.6 }
+                              ]}
+                            >
+                              <View
+                                style={[styles.notificationIcon, { backgroundColor: `${theme.colors.primary}1A` }]}
+                              >
+                                <Ionicons name="trending-up" size={16} color={theme.colors.primary} />
+                              </View>
+                              <View style={styles.notificationContent}>
+                                <Text style={[styles.notificationTitle, { color: theme.colors.text }]}>
+                                  Voce vendeu {formatCurrencyBRL(notification.amount)} via{' '}
+                                  {notification.paymentMethod ?? 'Medusa Pay'}
+                                </Text>
+                                <Text style={[styles.notificationSubtitle, { color: theme.colors.textSecondary }]}>
+                                  {formatDayAndTime(notification.createdAt)}
+                                </Text>
+                              </View>
+                              {!notification.isRead ? (
+                                <TouchableOpacity onPress={() => markNotificationAsRead(notification.id)}>
+                                  <Text style={[styles.markAsRead, { color: theme.colors.primary }]}>Marcar como lida</Text>
+                                </TouchableOpacity>
+                              ) : null}
                             </View>
-                            <View style={styles.notificationContent}>
-                              <Text style={[styles.notificationTitle, { color: theme.colors.text }]}>
-                                Voce vendeu {formatCurrencyBRL(notification.amount)} via{' '}
-                                {notification.paymentMethod ?? 'Medusa Pay'}
-                              </Text>
-                              <Text style={[styles.notificationSubtitle, { color: theme.colors.textSecondary }]}>
-                                {formatDayAndTime(notification.createdAt)}
-                              </Text>
-                            </View>
-                            {!notification.isRead ? (
-                              <TouchableOpacity onPress={() => markNotificationAsRead(notification.id)}>
-                                <Text style={[styles.markAsRead, { color: theme.colors.primary }]}>Marcar como lida</Text>
-                              </TouchableOpacity>
-                            ) : null}
-                          </View>
-                        ))
+                          ))}
+                        </ScrollView>
                       )}
                     </View>
                   </View>
@@ -475,10 +491,12 @@ const styles = StyleSheet.create({
   },
   notificationsCard: {
     borderRadius: 20,
-    padding: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 18,
     gap: 12,
-    borderWidth: 0,
-    width: 320,
+    borderWidth: 1,
+    width: '92%',
+    maxWidth: 360,
     elevation: 8,
     shadowColor: '#000',
     shadowOpacity: 0.08,
@@ -490,6 +508,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 4
+  },
+  notificationsTitle: {
+    fontSize: 16,
+    fontWeight: '700'
+  },
+  notificationsEmpty: {
+    fontSize: 13,
+    textAlign: 'center'
+  },
+  notificationsList: {
+    maxHeight: 260
+  },
+  notificationsListContent: {
+    gap: 12,
+    paddingBottom: 4
   },
   notificationItem: {
     flexDirection: 'row',

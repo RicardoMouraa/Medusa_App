@@ -55,7 +55,7 @@ const formatCompanyField = (value: unknown): string => {
 
 const ProfileScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const { profile, requestPasswordReset, signOut, updateProfileDetails } = useAuth();
-  const { definition, secretKey, apiOptions } = useDashboard();
+  const { definition, secretKey, apiOptions, displayLabel } = useDashboard();
   const { theme } = usePreferences();
   const { showToast } = useToast();
   const [name, setName] = useState(profile?.name ?? '');
@@ -69,11 +69,11 @@ const ProfileScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   } = useApiRequest<Record<string, unknown>>(
     () => {
       if (!secretKey) {
-        throw new Error(`Informe ${definition.passkeyLabel} para carregar os dados do ${definition.shortLabel}.`);
+        throw new Error(`Informe ${definition.passkeyLabel} para carregar os dados do ${displayLabel}.`);
       }
       return getCompany(secretKey, apiOptions);
     },
-    [apiOptions, definition.passkeyLabel, definition.shortLabel, secretKey],
+    [apiOptions, definition.passkeyLabel, displayLabel, secretKey],
     {
       immediate: Boolean(secretKey)
     }
@@ -276,7 +276,7 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 20,
-    gap: 16,
+    gap: 20,
     paddingBottom: 80
   },
   card: {

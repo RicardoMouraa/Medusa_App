@@ -17,7 +17,8 @@ let storedPreferences: UserPreferencesResponse = {
   language: 'pt-BR',
   notifications: defaultNotifications,
   expoPushToken: null,
-  selectedDashboardId: DEFAULT_DASHBOARD_ID
+  selectedDashboardId: DEFAULT_DASHBOARD_ID,
+  dashboardAliases: {}
 };
 
 const clone = (preferences: UserPreferencesResponse): UserPreferencesResponse => ({
@@ -25,6 +26,9 @@ const clone = (preferences: UserPreferencesResponse): UserPreferencesResponse =>
   notifications: {
     ...preferences.notifications,
     models: { ...preferences.notifications.models }
+  },
+  dashboardAliases: {
+    ...(preferences.dashboardAliases ?? {})
   }
 });
 
@@ -45,6 +49,10 @@ export const updateUserSettings = async (
         ...storedPreferences.notifications.models,
         ...(payload.notifications?.models ?? {})
       }
+    },
+    dashboardAliases: {
+      ...(storedPreferences.dashboardAliases ?? {}),
+      ...(payload.dashboardAliases ?? {})
     }
   });
 

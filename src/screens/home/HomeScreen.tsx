@@ -40,7 +40,8 @@ type MethodMeta = {
 const METHOD_LABELS: Record<string, MethodMeta> = {
   creditCard: { label: 'Cartão de Crédito', icon: 'card-outline', iconSet: 'ion' },
   pix: { label: 'Pix', icon: 'pix', iconSet: 'materialIcons' },
-  boleto: { label: 'Boleto', icon: 'document-text-outline', iconSet: 'ion' }
+  boleto: { label: 'Boleto', icon: 'document-text-outline', iconSet: 'ion' },
+  outros: { label: 'Outros', icon: 'stats-chart-outline', iconSet: 'ion' }
 };
 
 const getMethodMeta = (method: string): MethodMeta =>
@@ -150,7 +151,7 @@ type DashboardData = DashboardSummary & {
 const HomeScreen: React.FC = ({ navigation }: any) => {
   const { theme } = usePreferences();
   const { profile } = useAuth();
-  const { definition, secretKey, apiOptions } = useDashboard();
+  const { definition, secretKey, apiOptions, displayLabel } = useDashboard();
   const { showToast } = useToast();
   const [period, setPeriod] = useState<PeriodFilterValue>('today');
   const [customRange, setCustomRange] = useState<{ start: Date; end: Date } | null>(null);
@@ -159,7 +160,7 @@ const HomeScreen: React.FC = ({ navigation }: any) => {
 
   const fetchDashboard = useCallback(async () => {
     if (!secretKey) {
-      throw new Error(`Informe ${definition.passkeyLabel} para acessar o ${definition.shortLabel}.`);
+      throw new Error(`Informe ${definition.passkeyLabel} para acessar o ${displayLabel}.`);
     }
     const [balance, transactions] = await Promise.all([
       getBalance(secretKey, { recipientId }, apiOptions),
@@ -170,7 +171,8 @@ const HomeScreen: React.FC = ({ navigation }: any) => {
     const paidTransactions = transactions.filter((transaction) => transaction.status === 'paid');
     const availableFromTransactions = sumPaidNetAmount(paidTransactions);
     const filtered = paidTransactions.filter((transaction) => isWithinRange(transaction.createdAt, range));
-    const daysSpan = range ? Math.max(0, differenceInCalendarDays(range.end, range.start)) : 6;
+    const baseDays = range ? Math.max(0, differenceInCalendarDays(range.end, range.start)) : 6;
+    const daysSpan = paidTransactions.length === 0 ? Math.max(6, baseDays) : baseDays;
     const dailySales = buildDailySales(filtered, daysSpan);
 
     const totalPaidAmount = filtered.reduce((sum, transaction) => sum + transaction.amount, 0);
@@ -182,7 +184,7 @@ const HomeScreen: React.FC = ({ navigation }: any) => {
         acc[key] = (acc[key] ?? 0) + transaction.amount;
         return acc;
       },
-      { creditCard: 0, pix: 0, boleto: 0 }
+      { creditCard: 0, pix: 0, boleto: 0, outros: 0 }
     );
 
     return {
@@ -195,7 +197,7 @@ const HomeScreen: React.FC = ({ navigation }: any) => {
       salesByMethod,
       dailySales
     } satisfies DashboardData;
-  }, [apiOptions, customRange, definition.passkeyLabel, definition.shortLabel, period, recipientId, secretKey]);
+  }, [apiOptions, customRange, definition.passkeyLabel, displayLabel, period, recipientId, secretKey]);
 
   const { data, isLoading, error, refetch } = useApiRequest<DashboardData>(fetchDashboard, [fetchDashboard]);
 
@@ -214,16 +216,23 @@ const HomeScreen: React.FC = ({ navigation }: any) => {
   }, [refetch]);
 
   const salesDistribution = useMemo(() => {
-    if (!data) return [];
-    const totals = data.salesByMethod ?? {};
+    const totals = data?.salesByMethod ?? {};
+    const baseKeys = Object.keys(METHOD_LABELS);
+    const extraKeys = Object.keys(totals).filter((key) => !baseKeys.includes(key));
+    const orderedKeys = [...baseKeys, ...extraKeys];
     const sum = Object.values(totals).reduce((acc, value) => acc + value, 0);
-    if (sum === 0) return [];
-    return Object.entries(totals).map(([method, value]) => ({
-      method,
-      value,
-      percentage: value / sum
-    }));
-  }, [data]);
+    if (orderedKeys.length === 0) {
+      return [];
+    }
+    return orderedKeys.map((method) => {
+      const value = totals[method] ?? 0;
+      return {
+        method,
+        value,
+        percentage: sum > 0 ? value / sum : 0
+      };
+    });
+  }, [data?.salesByMethod]);
 
   useEffect(() => {
     if (!error) return;
@@ -236,7 +245,7 @@ const HomeScreen: React.FC = ({ navigation }: any) => {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <MedusaHeader title="Dashboard" subtitle={definition.shortLabel} />
+      <MedusaHeader title="Dashboard" subtitle={displayLabel} />
 
       <ScrollView
         style={styles.flex}
@@ -303,41 +312,33 @@ const HomeScreen: React.FC = ({ navigation }: any) => {
                   caption="Distribuição percentual"
                   titleStyle={styles.cardSectionTitle}
                 />
-                {salesDistribution.length === 0 ? (
-                  <EmptyState
-                    title="Ainda sem vendas"
-                    subtitle="Assim que suas vendas forem confirmadas aparecerão aqui por método."
-                    icon="pie-chart-outline"
-                  />
-                ) : (
-                  salesDistribution.map((item) => {
-                    const meta = getMethodMeta(item.method);
-                    return (
-                      <View key={item.method} style={styles.methodRow}>
-                        <View style={styles.methodHeader}>
-                          <View style={styles.methodInfo}>
-                            {renderMethodIcon(meta, theme.colors.primary)}
-                            <Text style={[styles.methodLabel, { color: theme.colors.text }]}>{meta.label}</Text>
-                          </View>
-                          <Text style={[styles.methodValue, { color: theme.colors.text }]}>
-                            {formatPercentage(item.percentage)}
-                          </Text>
+                {salesDistribution.map((item) => {
+                  const meta = getMethodMeta(item.method);
+                  return (
+                    <View key={item.method} style={styles.methodRow}>
+                      <View style={styles.methodHeader}>
+                        <View style={styles.methodInfo}>
+                          {renderMethodIcon(meta, theme.colors.primary)}
+                          <Text style={[styles.methodLabel, { color: theme.colors.text }]}>{meta.label}</Text>
                         </View>
-                        <View style={[styles.progressTrack, { backgroundColor: theme.colors.border }]}>
-                          <View
-                            style={[
-                              styles.progressIndicator,
-                              {
-                                width: `${item.percentage * 100}%`,
-                                backgroundColor: theme.colors.primary
-                              }
-                            ]}
-                          />
-                        </View>
+                        <Text style={[styles.methodValue, { color: theme.colors.text }]}>
+                          {formatPercentage(item.percentage)}
+                        </Text>
                       </View>
-                    );
-                  })
-                )}
+                      <View style={[styles.progressTrack, { backgroundColor: theme.colors.border }]}>
+                        <View
+                          style={[
+                            styles.progressIndicator,
+                            {
+                              width: `${Math.min(100, Math.max(0, item.percentage * 100))}%`,
+                              backgroundColor: theme.colors.primary
+                            }
+                          ]}
+                        />
+                      </View>
+                    </View>
+                  );
+                })}
               </Card>
             </View>
           </>
@@ -366,7 +367,8 @@ const styles = StyleSheet.create({
     flex: 1
   },
   scrollContent: {
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingTop: 12,
     gap: 24,
     paddingBottom: 100
   },

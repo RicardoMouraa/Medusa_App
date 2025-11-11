@@ -16,6 +16,7 @@ type UseDashboardResult = {
   secretKey: string | null;
   hasSecretKey: boolean;
   apiOptions: { baseUrl: string };
+  displayLabel: string;
   setDashboard: (dashboardId: DashboardId) => void;
 };
 
@@ -32,6 +33,9 @@ export const useDashboard = (): UseDashboardResult => {
       ? profile?.secondarySecretKey ?? null
       : profile?.secretKey ?? null;
 
+  const alias = preferences.dashboardAliases?.[definition.id]?.trim();
+  const displayLabel = alias && alias.length ? alias : definition.shortLabel;
+
   const apiOptions = useMemo(
     () => ({
       baseUrl: definition.baseUrl
@@ -45,6 +49,7 @@ export const useDashboard = (): UseDashboardResult => {
     secretKey,
     hasSecretKey: Boolean(secretKey),
     apiOptions,
+    displayLabel,
     setDashboard
   };
 };
