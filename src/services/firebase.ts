@@ -1,7 +1,11 @@
-import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
-import { getAuth } from 'firebase/auth';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
+import { initializeApp } from 'firebase/app';
+import { getAnalytics } from 'firebase/analytics';
+import { getAuth, initializeAuth } from 'firebase/auth';
+import type { Persistence } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
+import { Platform } from 'react-native';
 
 const firebaseConfig = {
   apiKey: "AIzaSyBh0kPw8D-a5IZUx9UjlctNPEpmSbP6GXQ",
@@ -15,8 +19,31 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 
+type ExtraConfig = {
+  enableFirebaseAnalytics?: boolean;
+};
+
+const resolveExtraConfig = (): ExtraConfig => {
+  if (Constants.expoConfig?.extra) {
+    return Constants.expoConfig.extra as ExtraConfig;
+  }
+
+  const manifest2 = (Constants as unknown as { manifest2?: { extra?: ExtraConfig } }).manifest2;
+  if (manifest2?.extra) {
+    return manifest2.extra;
+  }
+
+  if (Constants.manifest?.extra) {
+    return Constants.manifest.extra as ExtraConfig;
+  }
+
+  return {};
+};
+
+const extra = resolveExtraConfig();
+
 const analytics =
-  typeof window !== 'undefined'
+  extra.enableFirebaseAnalytics === true && typeof window !== 'undefined'
     ? (() => {
         try {
           return getAnalytics(app);
@@ -26,7 +53,28 @@ const analytics =
       })()
     : undefined;
 
-const auth = getAuth(app);
+type ReactNativePersistenceFactory = (storage: typeof AsyncStorage) => Persistence;
+
+let reactNativePersistenceFactory: ReactNativePersistenceFactory | null = null;
+
+if (Platform.OS !== 'web') {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const rnExports = require('@firebase/auth-compat/dist/rn/index.js');
+    if (typeof rnExports.getReactNativePersistence === 'function') {
+      reactNativePersistenceFactory = rnExports.getReactNativePersistence;
+    }
+  } catch (error) {
+    console.warn('[Firebase] React Native persistence unavailable. Falling back to memory.', error);
+  }
+}
+
+const auth =
+  Platform.OS === 'web' || !reactNativePersistenceFactory
+    ? getAuth(app)
+    : initializeAuth(app, {
+        persistence: reactNativePersistenceFactory(AsyncStorage)
+      });
 const db = getFirestore(app);
 
 export { app, analytics, auth, db };

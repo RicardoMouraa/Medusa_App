@@ -4,6 +4,7 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState
 } from 'react';
 import { FirebaseError } from 'firebase/app';
@@ -18,7 +19,9 @@ import {
   updateProfile
 } from 'firebase/auth';
 import {
+  DocumentReference,
   Timestamp,
+  deleteField,
   doc,
   getDoc,
   serverTimestamp,
@@ -27,12 +30,13 @@ import {
 } from 'firebase/firestore';
 
 import { auth, db } from '@/services/firebase';
+import { clearPasskeys, readPasskeys, writePasskeys } from '@/services/secureStore';
 
 type FirestoreUserDoc = {
   uid: string;
   name: string;
   email: string;
-  secretKey: string | null;
+  secretKey?: string | null;
   secondarySecretKey?: string | null;
   phone?: string | null;
   recipientId?: string | null;
@@ -92,13 +96,34 @@ const normalizeProfile = (data: FirestoreUserDoc): AuthUserProfile => ({
   uid: data.uid,
   name: data.name,
   email: data.email,
-  secretKey: data.secretKey ?? null,
-  secondarySecretKey: data.secondarySecretKey ?? null,
+  secretKey: null,
+  secondarySecretKey: null,
   phone: data.phone ?? null,
   recipientId: data.recipientId ?? null,
   createdAt: normalizeTimestamp(data.createdAt),
   updatedAt: normalizeTimestamp(data.updatedAt)
 });
+
+const applyStoredPasskeys = async (profile: AuthUserProfile): Promise<AuthUserProfile> => {
+  const stored = await readPasskeys(profile.uid);
+  return {
+    ...profile,
+    secretKey: stored?.secretKey ?? null,
+    secondarySecretKey: stored?.secondarySecretKey ?? null
+  };
+};
+
+const scrubLegacySecretKeys = async (ref: DocumentReference, data: FirestoreUserDoc) => {
+  if (!data.secretKey && !data.secondarySecretKey) {
+    return;
+  }
+
+  await updateDoc(ref, {
+    secretKey: deleteField(),
+    secondarySecretKey: deleteField(),
+    updatedAt: serverTimestamp()
+  });
+};
 
 const mapFirebaseError = (error: unknown) => {
   if (error instanceof FirebaseError) {
@@ -130,6 +155,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const [profile, setProfile] = useState<AuthUserProfile | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
   const [isProfileReady, setIsProfileReady] = useState(false);
+  const lastKnownUidRef = useRef<string | null>(null);
 
   const getProfile = useCallback(async (uid: string) => {
     const ref = doc(db, 'users', uid);
@@ -137,7 +163,14 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     if (!snapshot.exists()) {
       return null;
     }
-    return normalizeProfile(snapshot.data() as FirestoreUserDoc);
+
+    const data = snapshot.data() as FirestoreUserDoc;
+    if (data.secretKey || data.secondarySecretKey) {
+      await scrubLegacySecretKeys(ref, data);
+    }
+
+    const normalized = normalizeProfile(data);
+    return applyStoredPasskeys(normalized);
   }, []);
 
   const ensureUserDocument = useCallback(
@@ -150,8 +183,6 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
           uid: currentUser.uid,
           name: fallbackName(overrides?.name ?? currentUser.displayName),
           email: currentUser.email ?? overrides?.email ?? '',
-          secretKey: overrides?.secretKey ?? null,
-          secondarySecretKey: overrides?.secondarySecretKey ?? null,
           phone: overrides?.phone ?? null,
           recipientId: overrides?.recipientId ?? null,
           createdAt: serverTimestamp()
@@ -165,6 +196,11 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
           },
           { merge: true }
         );
+      } else {
+        const data = snapshot.data() as FirestoreUserDoc;
+        if (data.secretKey || data.secondarySecretKey) {
+          await scrubLegacySecretKeys(ref, data);
+        }
       }
 
       const nextProfile = await getProfile(currentUser.uid);
@@ -187,9 +223,14 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
       if (firebaseUser) {
+        lastKnownUidRef.current = firebaseUser.uid;
         setIsProfileReady(false);
         await ensureUserDocument(firebaseUser);
       } else {
+        if (lastKnownUidRef.current) {
+          await clearPasskeys(lastKnownUidRef.current);
+          lastKnownUidRef.current = null;
+        }
         setProfile(null);
         setIsProfileReady(true);
       }
@@ -221,7 +262,11 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   }, [ensureUserDocument]);
 
   const signOut = useCallback(async () => {
+    const uid = auth.currentUser?.uid;
     await firebaseSignOut(auth);
+    if (uid) {
+      await clearPasskeys(uid);
+    }
     setProfile(null);
     setIsProfileReady(true);
   }, []);
@@ -253,15 +298,25 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       }
 
       try {
+        const uid = auth.currentUser.uid;
+        const normalizedSecondary =
+          typeof secondarySecretKey === 'string' ? secondarySecretKey.trim() : undefined;
+        const storedSecondary =
+          typeof secondarySecretKey === 'undefined'
+            ? profile?.secondarySecretKey ?? null
+            : normalizedSecondary && normalizedSecondary.length
+              ? normalizedSecondary
+              : null;
+
+        await writePasskeys(uid, {
+          secretKey: primary,
+          secondarySecretKey: storedSecondary
+        });
+
         const ref = doc(db, 'users', auth.currentUser.uid);
         const changes: Record<string, unknown> = {
-          secretKey: primary,
           updatedAt: serverTimestamp()
         };
-        if (typeof secondarySecretKey !== 'undefined') {
-          const normalizedSecondary = secondarySecretKey.trim();
-          changes.secondarySecretKey = normalizedSecondary.length ? normalizedSecondary : null;
-        }
         if (typeof recipientId !== 'undefined') {
           const normalizedRecipientId =
             recipientId && recipientId.trim().length > 0 ? recipientId.trim() : null;
@@ -273,7 +328,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
         throw new Error(mapFirebaseError(error));
       }
     },
-    [refreshProfile]
+    [profile?.secondarySecretKey, refreshProfile]
   );
 
   const updateProfileDetails = useCallback(

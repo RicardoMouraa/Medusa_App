@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { usePreventScreenCapture } from 'expo-screen-capture';
 
 import PrimaryButton from '@/components/PrimaryButton';
 import TextField from '@/components/TextField';
@@ -8,6 +9,7 @@ import { usePreferences } from '@/context/PreferencesContext';
 import { useToast } from '@/hooks/useToast';
 
 const SecretKeyScreen: React.FC = () => {
+  usePreventScreenCapture();
   const { theme } = usePreferences();
   const { profile, saveSecretKeys, signOut } = useAuth();
   const { showToast } = useToast();
@@ -73,6 +75,7 @@ const SecretKeyScreen: React.FC = () => {
             onChangeText={setSecretKey}
             autoCapitalize="none"
             autoCorrect={false}
+            secureTextEntry
           />
           <TextField
             label="Passkey 2 (opcional)"
@@ -81,6 +84,7 @@ const SecretKeyScreen: React.FC = () => {
             onChangeText={setSecondarySecretKey}
             autoCapitalize="none"
             autoCorrect={false}
+            secureTextEntry
           />
           <TextField
             label="Recipient ID (opcional)"

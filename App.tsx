@@ -15,13 +15,13 @@ if (typeof global.Buffer === 'undefined') {
 }
 
 const AppProviders: React.FC<React.PropsWithChildren> = ({ children }) => (
-  <PreferencesProvider>
-    <AuthProvider>
+  <AuthProvider>
+    <PreferencesProvider>
       <NotificationCenterProvider>
         <SafeAreaProvider>{children}</SafeAreaProvider>
       </NotificationCenterProvider>
-    </AuthProvider>
-  </PreferencesProvider>
+    </PreferencesProvider>
+  </AuthProvider>
 );
 
 const AppContent = () => {

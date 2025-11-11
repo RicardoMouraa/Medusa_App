@@ -18,7 +18,7 @@ let storedPreferences: UserPreferencesResponse = {
   notifications: defaultNotifications,
   expoPushToken: null,
   selectedDashboardId: DEFAULT_DASHBOARD_ID,
-  dashboardAliases: {}
+  dashboardAliases: {} as UserPreferencesResponse['dashboardAliases']
 };
 
 const clone = (preferences: UserPreferencesResponse): UserPreferencesResponse => ({
@@ -29,7 +29,7 @@ const clone = (preferences: UserPreferencesResponse): UserPreferencesResponse =>
   },
   dashboardAliases: {
     ...(preferences.dashboardAliases ?? {})
-  }
+  } as UserPreferencesResponse['dashboardAliases']
 });
 
 export const getUserSettings = async (): Promise<UserPreferencesResponse> => {
@@ -53,7 +53,7 @@ export const updateUserSettings = async (
     dashboardAliases: {
       ...(storedPreferences.dashboardAliases ?? {}),
       ...(payload.dashboardAliases ?? {})
-    }
+    } as UserPreferencesResponse['dashboardAliases']
   });
 
   return Promise.resolve(clone(storedPreferences));

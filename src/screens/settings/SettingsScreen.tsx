@@ -32,7 +32,7 @@ const SettingsScreen: React.FC = () => {
   const { definition, selectedDashboardId, displayLabel } = useDashboard();
   const { showToast } = useToast();
   const dashboards = useMemo(() => getAvailableDashboards(), []);
-  const dashboardAliases = preferences.dashboardAliases ?? {};
+  const dashboardAliases: Partial<Record<DashboardId, string>> = preferences.dashboardAliases ?? {};
 
   const handleThemeToggle = useCallback(
     (value: boolean) => {

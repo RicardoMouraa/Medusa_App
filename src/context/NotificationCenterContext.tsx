@@ -5,6 +5,7 @@ import { ApiError, OrderSummary } from '@/types/api';
 import { sendLocalNotification } from '@/services/notifications';
 import { useDashboard } from '@/hooks/useDashboard';
 import { getTransactions } from '@/services/medusaApi';
+import { useAuth } from '@/context/AuthContext';
 
 const STORAGE_KEY_PREFIX = '@medusa_read_notifications_v1';
 const DEFAULT_POLL_INTERVAL_MS = 20000;
@@ -30,13 +31,14 @@ type NotificationCenterValue = {
 const NotificationCenterContext = createContext<NotificationCenterValue | undefined>(undefined);
 
 export const NotificationCenterProvider: React.FC<React.PropsWithChildren> = ({ children }) => {
+  const { user } = useAuth();
   const { secretKey, apiOptions, selectedDashboardId } = useDashboard();
   const [notifications, setNotifications] = useState<SaleNotification[]>([]);
   const [readIds, setReadIds] = useState<Set<string>>(new Set());
   const seenIdsRef = useRef<Set<string>>(new Set());
   const initialLoadRef = useRef(true);
 
-  const storageKey = `${STORAGE_KEY_PREFIX}:${selectedDashboardId}`;
+  const storageKey = `${STORAGE_KEY_PREFIX}:${user?.uid ?? 'guest'}:${selectedDashboardId}`;
 
   useEffect(() => {
     const loadReadIds = async () => {

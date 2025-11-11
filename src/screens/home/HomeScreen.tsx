@@ -216,7 +216,7 @@ const HomeScreen: React.FC = ({ navigation }: any) => {
   }, [refetch]);
 
   const salesDistribution = useMemo(() => {
-    const totals = data?.salesByMethod ?? {};
+    const totals: Record<string, number> = data?.salesByMethod ?? {};
     const baseKeys = Object.keys(METHOD_LABELS);
     const extraKeys = Object.keys(totals).filter((key) => !baseKeys.includes(key));
     const orderedKeys = [...baseKeys, ...extraKeys];

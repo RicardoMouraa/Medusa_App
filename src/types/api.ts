@@ -111,5 +111,5 @@ export interface UserPreferencesResponse {
   notifications: NotificationPreferences;
   expoPushToken?: string | null;
   selectedDashboardId?: DashboardId;
-  dashboardAliases?: Record<DashboardId, string>;
+  dashboardAliases?: Partial<Record<DashboardId, string>>;
 }

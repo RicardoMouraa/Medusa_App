@@ -1,51 +1,43 @@
-# MedusaPay Mobile (Offline Demo)
+# MedusaPay Mobile
 
-Expo + React Native application that mirrors the MedusaPay dashboard experience (home metrics, orders, finance tools, settings and push notifications).  
-This build runs entirely offline: authentication was removed and every screen uses mocked data returned from `src/services/api.ts`.
+Aplicativo Expo + React Native integrado ao ecossistema Medusa Pay. O fluxo agora protege as passkeys dos dashboards, evita vazamentos em dispositivos compartilhados e habilita configurações exigidas para publicar nas lojas da Apple e Google.
 
-## Requirements
-- Node.js 18 or newer
-- Expo CLI (optional) – `npm install -g expo-cli`
-- Android Studio, Xcode or a physical device / Expo Go for testing
+## Requisitos
+- Node.js 18 ou superior
+- Expo CLI (opcional) – `npm install -g expo-cli`
+- Android Studio, Xcode ou dispositivo físico/Expo Go para testes
 
-## Setup
-1. Install dependencies  
-   `npm install`
-2. Start the project  
-   `npm run android` (or `npm run ios` / `npm run web`)
+## Configuração
+1. Copie o template e ajuste identificadores/bandeiras conforme o ambiente:
+   ```bash
+   cp .env.example .env
+   ```
+2. Instale as dependências: `npm install`
+3. Rode em desenvolvimento: `npm run android`, `npm run ios` ou `npm run web`
 
-No environment variables, backend services or proxy servers are required.
+> O `.env` deve conter somente valores públicos (bundle IDs, flags). As passkeys reais são inseridas pelo usuário dentro do app e ficam criptografadas via SecureStore – nunca commitadas ou salvas no Firestore.
 
-## Features
-- Home dashboard with period selector, balance cards and sales breakdown populated with sample numbers.
-- Orders list + detail view backed by static mock orders.
-- Finance screen that simulates PIX withdraw requests and updates the in-memory balance/history.
-- Settings screen with persisted (AsyncStorage) notification and theme preferences.
-- Local push notification helper ready for Expo development builds.
+## Segurança implementada
+- **Passkeys protegidas localmente:** `AuthContext` removeu `secretKey`/`secondarySecretKey` do Firestore e passou a usar `expo-secure-store`. Logout ou invalidação de sessão apagam imediatamente as chaves do dispositivo.
+- **Bloqueio de captura de tela na tela de Passkeys:** `SecretKeyScreen` ativa `usePreventScreenCapture`, reduzindo risco de exfiltração visual.
+- **Preferências e notificações isoladas por usuário:** chaves do `AsyncStorage` agora incluem o UID do Firebase (`STORAGE_KEYS.preferences:${uid}` e `@medusa_read_notifications_v1:${uid}`), evitando que múltiplos logins compartilhem tokens, temas ou estado de leitura.
+- **Push/Sync condicionados ao login:** registro de push tokens e sincronização remota apenas quando o usuário está autenticado. O modo “guest” mantém preferências locais, mas não envia nada ao backend.
+- **Configuração pronta para produção:** `app.config.ts` define `bundleIdentifier`, `android.package`, descrição de uso das notificações e flag pública `EXPO_PUBLIC_ENABLE_ANALYTICS` para habilitar/desabilitar Firebase Analytics conforme o consentimento.
 
-## Project Structure
-```
-src/
-  components/        Reusable UI elements
-  context/           Preferences provider (theme + notifications)
-  hooks/             Toast helper and generic utilities
-  navigation/        Stack + Bottom Tabs configuration
-  screens/           Home, Orders, Finance, Settings
-  services/          Mock API + notification helpers
-  theme/             Light/dark palettes
-  utils/             Formatting, validation, notification templates
-```
+## Fluxo das passkeys
+1. Usuário autentica com email/senha (Firebase Auth).
+2. O app direciona para **“Informe suas Passkeys”** enquanto não houver chaves válidas no SecureStore.
+3. As chaves abastecem `useDashboard`, mas são sempre exibidas mascaradas (prefixo + sufixo). Nenhuma requisição envia valores salvos em Firestore.
+4. Ao sair da conta, SecureStore e preferências daquele UID são limpos; outro usuário no mesmo aparelho não acessa dados anteriores.
 
-## Data & Customisation
-- `src/services/api.ts` exports async functions that resolve mocked responses. Adjust the constants in that file to change the sample data or reintroduce real API calls.
-- Removing the mocked layer later requires wiring a real backend + authentication flow (previous implementation used MedusaPay tokens and a proxy).
-- Preferences are persisted locally via `AsyncStorage`; remote sync calls now update only the local mock state.
+## Build para produção
+1. Ajuste `.env` com os identificadores definitivos (`APP_BUNDLE_IDENTIFIER`, `APP_ANDROID_PACKAGE`) e configure certificados/perfis no EAS (`eas credentials`).
+2. Só habilite `EXPO_PUBLIC_ENABLE_ANALYTICS=true` após coletar consentimento (LGPD). O Firebase Analytics permanece desativado por padrão.
+3. Execute `eas build --platform android` e/ou `eas build --platform ios` usando os mesmos identificadores.
+4. Teste em dispositivos reais:
+   - Login, cadastro e edição de passkeys
+   - Solicitação de saques e polling de vendas
+   - Recebimento de push/local notifications
+   - Logout garantindo limpeza das chaves e preferências
 
-## Notifications
-- Implemented with `expo-notifications` (`src/services/notifications.ts`).
-- Templates live in `src/utils/notifications.ts`; the preferences context handles opt-in/out and sound toggles.
-- Remote push tests still require an Expo development build (`expo run:android` or `expo run:ios`).
-
-## Notes
-- `app.config.ts` now only registers the notifications plugin; no `.env` file is necessary.
-- Backend, frontend and proxy folders were removed—this project focuses solely on the mobile client demo.
+Com essas etapas, o app fica pronto para validação interna e envio às lojas – restando apenas rotacionar as passkeys oficiais diretamente com o time de backend e configurar o proxy seguro (quando disponível) antes da publicação.*** End Patch

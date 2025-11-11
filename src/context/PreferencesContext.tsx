@@ -10,6 +10,7 @@ import React, {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { STORAGE_KEYS } from '@/constants/storageKeys';
+import { useAuth } from '@/context/AuthContext';
 import { DEFAULT_DASHBOARD_ID } from '@/constants/dashboards';
 import type { DashboardId } from '@/types/dashboard';
 import { getUserSettings, updateUserSettings } from '@/services/preferences';
@@ -58,12 +59,15 @@ const defaultState: PreferencesState = {
   notifications: defaultNotifications,
   expoPushToken: null,
   selectedDashboardId: DEFAULT_DASHBOARD_ID,
-  dashboardAliases: {}
+  dashboardAliases: {} as PreferencesState['dashboardAliases']
 };
 
 const PreferencesContext = createContext<PreferencesContextValue | undefined>(undefined);
 
-const mergePreferences = (base: PreferencesState, incoming?: Partial<PreferencesState>) => {
+const mergePreferences = (
+  base: PreferencesState,
+  incoming?: Partial<PreferencesState>
+): PreferencesState => {
   if (!incoming) return base;
   return {
     ...base,
@@ -79,7 +83,7 @@ const mergePreferences = (base: PreferencesState, incoming?: Partial<Preferences
     dashboardAliases: {
       ...(base.dashboardAliases ?? {}),
       ...(incoming.dashboardAliases ?? {})
-    }
+    } as PreferencesState['dashboardAliases']
   };
 };
 
@@ -87,24 +91,29 @@ const determineTemplateKey = (notifications: NotificationPreferences) =>
   notifications.models.creative ? 'creative' : 'default';
 
 export const PreferencesProvider: React.FC<React.PropsWithChildren> = ({ children }) => {
+  const { user } = useAuth();
   const [preferences, setPreferences] = useState<PreferencesState>(defaultState);
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const isHydratedRef = useRef(false);
   const suppressRemoteSyncRef = useRef(false);
   const remoteSyncTimeout = useRef<NodeJS.Timeout | null>(null);
+  const storageKey = useMemo(
+    () => `${STORAGE_KEYS.preferences}:${user?.uid ?? 'guest'}`,
+    [user?.uid]
+  );
 
   const persistLocal = useCallback(async (next: PreferencesState) => {
     try {
-      await AsyncStorage.setItem(STORAGE_KEYS.preferences, JSON.stringify(next));
+      await AsyncStorage.setItem(storageKey, JSON.stringify(next));
     } catch (error) {
       console.error('[Preferences] Failed to persist locally', error);
     }
-  }, []);
+  }, [storageKey]);
 
   const loadLocalPreferences = useCallback(async () => {
     try {
-      const raw = await AsyncStorage.getItem(STORAGE_KEYS.preferences);
+      const raw = await AsyncStorage.getItem(storageKey);
       const parsed = raw ? (JSON.parse(raw) as PreferencesState) : undefined;
       setPreferences((prev) => mergePreferences(prev, parsed));
     } catch (error) {
@@ -113,9 +122,12 @@ export const PreferencesProvider: React.FC<React.PropsWithChildren> = ({ childre
       isHydratedRef.current = true;
       setIsLoading(false);
     }
-  }, []);
+  }, [storageKey]);
 
   useEffect(() => {
+    isHydratedRef.current = false;
+    setIsLoading(true);
+    setPreferences(defaultState);
     void loadLocalPreferences();
   }, [loadLocalPreferences]);
 
@@ -134,6 +146,7 @@ export const PreferencesProvider: React.FC<React.PropsWithChildren> = ({ childre
 
   const scheduleRemoteSync = useCallback(
     (next: PreferencesState) => {
+      if (!user) return;
       if (suppressRemoteSyncRef.current) return;
       if (remoteSyncTimeout.current) {
         clearTimeout(remoteSyncTimeout.current);
@@ -155,7 +168,7 @@ export const PreferencesProvider: React.FC<React.PropsWithChildren> = ({ childre
         }
       }, 600);
     },
-    []
+    [user]
   );
 
   useEffect(
@@ -186,6 +199,7 @@ export const PreferencesProvider: React.FC<React.PropsWithChildren> = ({ childre
   );
 
   const refreshFromServer = useCallback(async () => {
+    if (!user) return;
     setIsSyncing(true);
     try {
       const response = await getUserSettings();
@@ -199,7 +213,7 @@ export const PreferencesProvider: React.FC<React.PropsWithChildren> = ({ childre
       suppressRemoteSyncRef.current = false;
       setIsSyncing(false);
     }
-  }, [persistLocal]);
+  }, [persistLocal, user]);
 
   useEffect(() => {
     if (!isHydratedRef.current) return;
@@ -230,8 +244,9 @@ export const PreferencesProvider: React.FC<React.PropsWithChildren> = ({ childre
     (dashboardId: DashboardId, name: string) => {
       const trimmed = name.trim();
       applyPreferences((current) => {
-        const currentAliases = current.dashboardAliases ?? {};
-        const nextAliases = { ...currentAliases };
+        const currentAliases: Partial<Record<DashboardId, string>> =
+          current.dashboardAliases ?? {};
+        const nextAliases: Partial<Record<DashboardId, string>> = { ...currentAliases };
         if (!trimmed) {
           delete nextAliases[dashboardId];
         } else {
@@ -286,6 +301,7 @@ export const PreferencesProvider: React.FC<React.PropsWithChildren> = ({ childre
   );
 
   const refreshPushToken = useCallback(async () => {
+    if (!user) return null;
     try {
       const token = await registerForPushNotificationsAsync();
       if (token) {
@@ -302,14 +318,14 @@ export const PreferencesProvider: React.FC<React.PropsWithChildren> = ({ childre
       console.error('[Preferences] Failed to register push token', error);
       return null;
     }
-  }, [applyPreferences]);
+  }, [applyPreferences, user]);
 
   useEffect(() => {
-    if (!isHydratedRef.current) return;
+    if (!isHydratedRef.current || !user) return;
     if (!preferences.expoPushToken) {
       void refreshPushToken();
     }
-  }, [preferences.expoPushToken, refreshPushToken]);
+  }, [preferences.expoPushToken, refreshPushToken, user]);
 
   const theme = preferences.theme === 'dark' ? darkTheme : lightTheme;
   const navigationTheme = buildNavigationTheme(theme);
