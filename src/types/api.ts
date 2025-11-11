@@ -1,4 +1,12 @@
-export type PeriodFilter = 'today' | '7d' | '30d' | '90d' | '1y';
+import type { DashboardId } from './dashboard';
+
+export type PeriodFilter = 'today' | '7d' | '30d' | '90d' | '1y' | 'custom';
+
+export type ApiError = {
+  message: string;
+  status?: number;
+  details?: unknown;
+};
 
 export interface AuthResponse {
   token: string;
@@ -36,6 +44,10 @@ export interface OrderSummary {
   statusLabel?: string;
   createdAt: string;
   paymentMethod?: string;
+  fees?: Array<{
+    label: string;
+    amount: number;
+  }>;
 }
 
 export interface OrderDetail extends OrderSummary {
@@ -98,4 +110,6 @@ export interface UserPreferencesResponse {
   language: string;
   notifications: NotificationPreferences;
   expoPushToken?: string | null;
+  selectedDashboardId?: DashboardId;
+  dashboardAliases?: Record<DashboardId, string>;
 }

@@ -1,5 +1,14 @@
+export type AppTabParamList = {
+  HomeTab: undefined;
+  OrdersTab: undefined;
+  FinanceTab: undefined;
+  SettingsTab: undefined;
+};
+
 export type RootStackParamList = {
-  App: undefined;
+  App: { screen?: keyof AppTabParamList } | undefined;
+  SecretKey: undefined;
+  Profile: undefined;
 };
 
 export type OrdersStackParamList = {
@@ -16,9 +25,8 @@ export type SettingsStackParamList = {
   Settings: undefined;
 };
 
-export type AppTabParamList = {
-  HomeTab: undefined;
-  OrdersTab: undefined;
-  FinanceTab: undefined;
-  SettingsTab: undefined;
+export type AuthStackParamList = {
+  Login: undefined;
+  Register: undefined;
+  ForgotPassword: undefined;
 };

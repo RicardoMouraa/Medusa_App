@@ -2,16 +2,25 @@ import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Platform, StyleSheet, View } from 'react-native';
 
 import { usePreferences } from '@/context/PreferencesContext';
+import { useAuth } from '@/context/AuthContext';
 import HomeScreen from '@/screens/home/HomeScreen';
 import OrdersScreen from '@/screens/orders/OrdersScreen';
 import OrderDetailsScreen from '@/screens/orders/OrderDetailsScreen';
 import FinanceScreen from '@/screens/finance/FinanceScreen';
 import WithdrawHistoryScreen from '@/screens/finance/WithdrawHistoryScreen';
 import SettingsScreen from '@/screens/settings/SettingsScreen';
+import LoginScreen from '@/screens/auth/LoginScreen';
+import RegisterScreen from '@/screens/auth/RegisterScreen';
+import ForgotPasswordScreen from '@/screens/auth/ForgotPasswordScreen';
+import SecretKeyScreen from '@/screens/auth/SecretKeyScreen';
+import ProfileScreen from '@/screens/profile/ProfileScreen';
+import BrandSplash from '@/components/BrandSplash';
 import {
   AppTabParamList,
+  AuthStackParamList,
   FinanceStackParamList,
   OrdersStackParamList,
   RootStackParamList
@@ -22,6 +31,7 @@ const RootStack = createNativeStackNavigator<RootStackParamList>();
 const AppTabs = createBottomTabNavigator<AppTabParamList>();
 const OrdersStack = createNativeStackNavigator<OrdersStackParamList>();
 const FinanceStack = createNativeStackNavigator<FinanceStackParamList>();
+const AuthStack = createNativeStackNavigator<AuthStackParamList>();
 
 const renderTabIcon = (
   route: keyof AppTabParamList,
@@ -32,7 +42,7 @@ const renderTabIcon = (
   const size = focused ? 26 : 24;
   switch (route) {
     case 'HomeTab':
-      return <Ionicons name={focused ? 'speedometer' : 'speedometer-outline'} size={size} color={color} />;
+      return <Ionicons name={focused ? 'home' : 'home-outline'} size={size} color={color} />;
     case 'OrdersTab':
       return (
         <MaterialCommunityIcons
@@ -102,6 +112,24 @@ const FinanceNavigator = () => {
   );
 };
 
+const AuthNavigator = () => {
+  const { theme } = usePreferences();
+  return (
+    <AuthStack.Navigator
+      screenOptions={{
+        headerShown: false,
+        contentStyle: {
+          backgroundColor: theme.colors.background
+        }
+      }}
+    >
+      <AuthStack.Screen name="Login" component={LoginScreen} />
+      <AuthStack.Screen name="Register" component={RegisterScreen} />
+      <AuthStack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+    </AuthStack.Navigator>
+  );
+};
+
 const AppTabsNavigator = () => {
   const { theme } = usePreferences();
   return (
@@ -111,9 +139,10 @@ const AppTabsNavigator = () => {
         tabBarStyle: {
           backgroundColor: theme.colors.tabBarBackground,
           borderTopColor: theme.colors.border,
-          paddingTop: 4,
-          paddingBottom: 10,
-          height: 70
+          paddingTop: 6,
+          paddingBottom: Platform.OS === 'ios' ? 22 : 14,
+          height: Platform.OS === 'ios' ? 88 : 76,
+          marginBottom: Platform.OS === 'android' ? 6 : 0
         },
         tabBarLabelStyle: {
           fontSize: 12,
@@ -130,7 +159,7 @@ const AppTabsNavigator = () => {
       <AppTabs.Screen
         name="SettingsTab"
         component={SettingsScreen}
-        options={{ title: 'Configurações' }}
+        options={{ title: 'Configuracoes' }}
       />
     </AppTabs.Navigator>
   );
@@ -138,6 +167,30 @@ const AppTabsNavigator = () => {
 
 const RootNavigator = () => {
   const { theme } = usePreferences();
+  const { isInitializing, isProfileReady, user, profile } = useAuth();
+
+  if (isInitializing || !isProfileReady) {
+    return <BrandSplash />;
+  }
+
+  if (!user) {
+    return <AuthNavigator />;
+  }
+
+  if (!profile?.secretKey) {
+    return (
+      <RootStack.Navigator
+        screenOptions={{
+          headerShown: false,
+          contentStyle: {
+            backgroundColor: theme.colors.background
+          }
+        }}
+      >
+        <RootStack.Screen name="SecretKey" component={SecretKeyScreen} />
+      </RootStack.Navigator>
+    );
+  }
 
   return (
     <RootStack.Navigator
@@ -149,8 +202,22 @@ const RootNavigator = () => {
       }}
     >
       <RootStack.Screen name="App" component={AppTabsNavigator} />
+      <RootStack.Screen name="Profile" component={ProfileScreen} />
+      <RootStack.Screen name="SecretKey" component={SecretKeyScreen} />
     </RootStack.Navigator>
   );
 };
+
+const styles = StyleSheet.create({
+  loaderContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12
+  },
+  loaderText: {
+    fontSize: 14
+  }
+});
 
 export default RootNavigator;

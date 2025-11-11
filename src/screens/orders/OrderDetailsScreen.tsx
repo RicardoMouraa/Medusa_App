@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import Card from '@/components/Card';
 import SectionTitle from '@/components/SectionTitle';
@@ -8,9 +9,16 @@ import StatusBadge from '@/components/StatusBadge';
 import { usePreferences } from '@/context/PreferencesContext';
 import { useApiRequest } from '@/hooks/useApiRequest';
 import { useToast } from '@/hooks/useToast';
-import { getOrderById } from '@/services/api';
+import { getTransactionById } from '@/services/medusaApi';
 import { OrderDetail } from '@/types/api';
 import { formatCurrencyBRL, formatDayAndTime } from '@/utils/format';
+import { calculateNetAmount, RESERVE_PERCENTAGE } from '@/utils/finance';
+import { useDashboard } from '@/hooks/useDashboard';
+
+const RESERVE_LABEL = `Reserva financeira (${(RESERVE_PERCENTAGE * 100).toFixed(2)}%)`;
+const INTERMEDIATION_LABEL = 'Taxa de intermediação (5,99% + R$ 3,99)';
+const NET_AFTER_INTERMEDIATION_LABEL = 'Valor líquido após taxa';
+const NET_LABEL = 'Disponível estimado (após reserva)';
 
 type OrderDetailsScreenProps = {
   route: {
@@ -23,13 +31,22 @@ type OrderDetailsScreenProps = {
 
 const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({ route, navigation }) => {
   const { theme } = usePreferences();
+  const { definition, secretKey, apiOptions, displayLabel } = useDashboard();
   const { showToast } = useToast();
   const { orderId } = route.params;
+  const insets = useSafeAreaInsets();
 
   const { data, isLoading, error, refetch } = useApiRequest<OrderDetail>(
-    () => getOrderById(orderId),
-    [orderId]
+    () =>
+      secretKey
+        ? getTransactionById(secretKey, orderId, apiOptions)
+        : Promise.reject(
+            new Error(`Informe ${definition.passkeyLabel} para abrir pedidos no ${displayLabel}.`)
+          ),
+    [apiOptions, definition.passkeyLabel, displayLabel, orderId, secretKey]
   );
+
+  const feeSummary = useMemo(() => (data ? calculateNetAmount(data.amount) : null), [data?.amount]);
 
   const handleGoBack = useCallback(() => {
     navigation.goBack();
@@ -45,7 +62,7 @@ const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({ route, navigati
   }, [error, showToast]);
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background, paddingTop: insets.top }]}>
       <View style={styles.header}>
         <TouchableOpacity onPress={handleGoBack} style={styles.backButton}>
           <Ionicons name="chevron-back" size={24} color={theme.colors.text} />
@@ -82,6 +99,43 @@ const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({ route, navigati
               </View>
             ) : null}
           </Card>
+
+          {feeSummary ? (
+            <Card style={styles.card}>
+              <SectionTitle
+                title="Taxas"
+                caption="Aplicamos 5,99% + R$ 3,99 de intermediação e reserva financeira de 6,99%"
+              />
+              <View style={styles.feeRow}>
+                <Text style={[styles.feeLabel, { color: theme.colors.textSecondary }]}>Valor bruto</Text>
+                <Text style={[styles.feeValue, { color: theme.colors.text }]}>{formatCurrencyBRL(data.amount)}</Text>
+              </View>
+              <View style={styles.feeRow}>
+                <Text style={[styles.feeLabel, { color: theme.colors.textSecondary }]}>{INTERMEDIATION_LABEL}</Text>
+                <Text style={[styles.feeValue, { color: theme.colors.text }]}>
+                  {formatCurrencyBRL(feeSummary.intermediationFee)}
+                </Text>
+              </View>
+              <View style={styles.feeRow}>
+                <Text style={[styles.feeLabel, { color: theme.colors.textSecondary }]}>
+                  {NET_AFTER_INTERMEDIATION_LABEL}
+                </Text>
+                <Text style={[styles.feeValue, { color: theme.colors.text }]}>
+                  {formatCurrencyBRL(feeSummary.netBeforeReserve)}
+                </Text>
+              </View>
+              <View style={styles.feeRow}>
+                <Text style={[styles.feeLabel, { color: theme.colors.textSecondary }]}>{RESERVE_LABEL}</Text>
+                <Text style={[styles.feeValue, { color: theme.colors.text }]}>
+                  {formatCurrencyBRL(feeSummary.reserveHold)}
+                </Text>
+              </View>
+              <View style={[styles.feeRow, styles.feeHighlight]}>
+                <Text style={[styles.feeLabel, { color: theme.colors.text }]}>{NET_LABEL}</Text>
+                <Text style={[styles.feeValue, { color: theme.colors.text }]}>{formatCurrencyBRL(feeSummary.net)}</Text>
+              </View>
+            </Card>
+          ) : null}
 
           {data.customerName || data.customerEmail ? (
             <Card style={styles.card}>
@@ -139,7 +193,7 @@ const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({ route, navigati
           ) : null}
         </ScrollView>
       ) : null}
-    </View>
+    </SafeAreaView>
   );
 };
 
@@ -230,6 +284,26 @@ const styles = StyleSheet.create({
   },
   timelineContent: {
     flex: 1
+  },
+  feeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 6
+  },
+  feeLabel: {
+    fontSize: 13,
+    fontWeight: '500'
+  },
+  feeValue: {
+    fontSize: 14,
+    fontWeight: '700'
+  },
+  feeHighlight: {
+    marginTop: 4,
+    paddingTop: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(0,0,0,0.08)'
   }
 });
 

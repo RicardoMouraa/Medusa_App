@@ -6,6 +6,8 @@ import Toast from 'react-native-toast-message';
 import { Buffer } from 'buffer';
 
 import { PreferencesProvider, usePreferences } from '@/context/PreferencesContext';
+import { AuthProvider } from '@/context/AuthContext';
+import { NotificationCenterProvider } from '@/context/NotificationCenterContext';
 import RootNavigator from '@/navigation/RootNavigator';
 
 if (typeof global.Buffer === 'undefined') {
@@ -14,7 +16,11 @@ if (typeof global.Buffer === 'undefined') {
 
 const AppProviders: React.FC<React.PropsWithChildren> = ({ children }) => (
   <PreferencesProvider>
-    <SafeAreaProvider>{children}</SafeAreaProvider>
+    <AuthProvider>
+      <NotificationCenterProvider>
+        <SafeAreaProvider>{children}</SafeAreaProvider>
+      </NotificationCenterProvider>
+    </AuthProvider>
   </PreferencesProvider>
 );
 

@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { AppState, AppStateStatus } from 'react-native';
 
-import { ApiError } from '@/services/api';
+import { ApiError } from '@/types/api';
 
 type UseApiRequestOptions<T> = {
   immediate?: boolean;
   transform?: (data: T) => T;
+  refreshInterval?: number;
 };
 
 type ApiRequestResult<T> = {
@@ -23,6 +25,7 @@ export const useApiRequest = <T>(
   const [data, setData] = useState<T | null>(null);
   const [isLoading, setIsLoading] = useState(Boolean(options?.immediate ?? true));
   const [error, setError] = useState<ApiError | null>(null);
+  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
@@ -42,6 +45,26 @@ export const useApiRequest = <T>(
     void fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, dependencies);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      appStateRef.current = nextState;
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!options?.refreshInterval) return;
+    const interval = setInterval(() => {
+      if (appStateRef.current === 'active') {
+        void fetchData();
+      }
+    }, options.refreshInterval);
+    return () => clearInterval(interval);
+  }, [fetchData, options?.refreshInterval]);
 
   return {
     data,
