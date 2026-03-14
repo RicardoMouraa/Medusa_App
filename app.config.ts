@@ -19,7 +19,7 @@ const easProjectId =
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
 
-  name: 'MedusaPay',
+  name: 'Medusa Pay',
   slug: 'medusa-app',
   version: packageVersion,
 
@@ -40,6 +40,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     supportsTablet: false,
     buildNumber: '1',
     infoPlist: {
+      CFBundleDisplayName: 'Medusa Pay',
       NSUserNotificationUsageDescription:
         'Usamos notificações para alertar sobre vendas, saques e eventos do painel MedusaPay.'
     }
@@ -72,3 +73,4 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     'expo-notifications'
   ]
 });
+
