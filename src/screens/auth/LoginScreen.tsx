@@ -21,10 +21,12 @@ type LoginScreenProps = {
   navigation: any;
 };
 
-const logo = require('../../../assets/logo-horizontal-branca.png');
+const lightLogo = require('../../../assets/logo-horizontal-preta.png');
+const darkLogo = require('../../../assets/logo-horizontal-branca.png');
 
 const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
   const { theme } = usePreferences();
+  const logo = theme.isDark ? darkLogo : lightLogo;
   const { signIn } = useAuth();
   const { showToast } = useToast();
   const [email, setEmail] = useState('');

@@ -21,10 +21,12 @@ type RegisterScreenProps = {
   navigation: any;
 };
 
-const logo = require('../../../assets/logo-horizontal-branca.png');
+const lightLogo = require('../../../assets/logo-horizontal-preta.png');
+const darkLogo = require('../../../assets/logo-horizontal-branca.png');
 
 const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) => {
   const { theme } = usePreferences();
+  const logo = theme.isDark ? darkLogo : lightLogo;
   const { signUp } = useAuth();
   const { showToast } = useToast();
 
