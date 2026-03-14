@@ -158,6 +158,36 @@ Se for necessario trocar o projeto Firebase (ambiente do cliente, staging, etc.)
 
 Se precisar de perfis de build ou ambientes, crie um `eas.json` conforme a documentacao oficial do Expo.
 
+### Fluxo recomendado para update iOS (Apple Store)
+Base atual publicada:
+- Tag de baseline: `v1.0.0-ios-live`
+
+Passo a passo para cada nova release:
+1. Garanta branch limpa e sincronizada:
+   ```bash
+   git status
+   git pull
+   ```
+2. Suba a versao de marketing (App Store) com SemVer:
+   ```bash
+   npm run version:patch
+   # ou npm run version:minor
+   # ou npm run version:major
+   ```
+3. Gere o build iOS de producao:
+   ```bash
+   npm run release:ios:build
+   ```
+4. Envie o ultimo build para o App Store Connect:
+   ```bash
+   npm run release:ios:submit
+   ```
+
+Notas importantes:
+- `app.config.ts` usa a versao do `package.json`, evitando versoes diferentes em arquivos distintos.
+- `eas.json` esta com `appVersionSource: "remote"` e `production.autoIncrement: true`, entao o `buildNumber` sobe automaticamente a cada build de producao.
+- Sempre rode os testes essenciais antes de buildar e publicar.
+
 ## Checklist de release
 - Bundle ID e package finais configurados no `.env`.
 - Icones e splash atualizados em `assets`.
@@ -165,7 +195,7 @@ Se precisar de perfis de build ou ambientes, crie um `eas.json` conforme a docum
 - Analytics somente com consentimento (LGPD).
 - Teste de login, cadastro, passkeys, saques e transacoes.
 - Validacao de notificacoes em dispositivo real.
-- Versao do app atualizada em `app.config.ts`.
+- Versao do app atualizada (via `npm run version:patch|minor|major`).
 
 ## Solucao de problemas
 - Metro travado: rode `npx expo start --clear`.

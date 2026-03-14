@@ -6,7 +6,12 @@
         "start": "expo start",
         "android": "expo start --android",
         "ios": "expo start --ios",
-        "web": "expo start --web"
+        "web": "expo start --web",
+        "version:patch": "npm version patch",
+        "version:minor": "npm version minor",
+        "version:major": "npm version major",
+        "release:ios:build": "eas build --platform ios --profile production",
+        "release:ios:submit": "eas submit --platform ios --profile production --latest"
     },
     "dependencies": {
         "@expo/vector-icons": "^15.0.3",

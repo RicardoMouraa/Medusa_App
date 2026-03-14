@@ -1,6 +1,9 @@
 import 'dotenv/config';
 import { ConfigContext, ExpoConfig } from 'expo/config';
 
+const packageVersion =
+  process.env.APP_VERSION ?? require('./package.json').version;
+
 const bundleIdentifier =
   process.env.APP_BUNDLE_IDENTIFIER ?? 'com.medusapay.app';
 
@@ -18,7 +21,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
 
   name: 'MedusaPay',
   slug: 'medusa-app',
-  version: '1.0.0',
+  version: packageVersion,
 
   orientation: 'portrait',
   userInterfaceStyle: 'automatic',
