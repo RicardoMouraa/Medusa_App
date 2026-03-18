@@ -3,6 +3,7 @@ import { LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
 import Svg, { Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 
 import Card from '@/components/Card';
+import { usePreferences } from '@/context/PreferencesContext';
 import { formatCurrencyBRL } from '@/utils/format';
 
 type SalesChartPoint = {
@@ -19,7 +20,13 @@ type SalesChartCardProps = {
 const GRAPH_HEIGHT = 160;
 
 const SalesChartCard: React.FC<SalesChartCardProps> = ({ data, currency = 'BRL', tickCount = 5 }) => {
+  const { theme } = usePreferences();
   const [chartWidth, setChartWidth] = useState(0);
+  const titleColor = theme.isDark ? theme.colors.text : '#032B0B';
+  const subtitleColor = theme.isDark ? theme.colors.textSecondary : '#4F6F58';
+  const axisColor = theme.isDark ? theme.colors.textSecondary : '#4F6F58';
+  const labelColor = theme.isDark ? theme.colors.textMuted : '#7A8A80';
+  const badgeBackground = theme.isDark ? 'rgba(6, 168, 82, 0.22)' : 'rgba(12, 176, 91, 0.12)';
 
   const maxValue = useMemo(() => Math.max(...data.map((item) => item.value), 0), [data]);
 
@@ -69,24 +76,24 @@ const SalesChartCard: React.FC<SalesChartCardProps> = ({ data, currency = 'BRL',
     <Card style={styles.card}>
       <View style={styles.header}>
         <View>
-          <Text style={styles.title}>Vendas por dia</Text>
-          <Text style={styles.subtitle}>Acompanhe o volume diário da sua empresa.</Text>
+          <Text style={[styles.title, { color: titleColor }]}>Vendas por dia</Text>
+          <Text style={[styles.subtitle, { color: subtitleColor }]}>Acompanhe o volume diário da sua empresa.</Text>
         </View>
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>{currency}</Text>
+        <View style={[styles.badge, { backgroundColor: badgeBackground }]}>
+          <Text style={[styles.badgeText, { color: theme.colors.primary }]}>{currency}</Text>
         </View>
       </View>
 
       {data.length === 0 ? (
         <View style={styles.empty}>
-          <Text style={styles.emptyText}>Ainda não há transações pagas neste período.</Text>
+          <Text style={[styles.emptyText, { color: labelColor }]}>Ainda não há transações pagas neste período.</Text>
         </View>
       ) : (
         <>
           <View style={styles.graphRow}>
             <View style={styles.axisColumn}>
               {ticks.map((value, index) => (
-                <Text key={`tick-${index}`} style={styles.axisLabel}>
+                <Text key={`tick-${index}`} style={[styles.axisLabel, { color: axisColor }]}>
                   {formatCurrencyBRL(value)}
                 </Text>
               ))}
@@ -111,7 +118,7 @@ const SalesChartCard: React.FC<SalesChartCardProps> = ({ data, currency = 'BRL',
           </View>
           <View style={styles.labelsRow}>
             {data.map((point) => (
-              <Text key={point.label} style={styles.label}>
+              <Text key={point.label} style={[styles.label, { color: labelColor }]}>
                 {point.label}
               </Text>
             ))}
@@ -134,23 +141,19 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 16,
-    fontWeight: '700',
-    color: '#032B0B'
+    fontWeight: '700'
   },
   subtitle: {
-    fontSize: 13,
-    color: '#4F6F58'
+    fontSize: 13
   },
   badge: {
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: 'rgba(12, 176, 91, 0.12)'
+    borderRadius: 16
   },
   badgeText: {
     fontSize: 12,
-    fontWeight: '700',
-    color: '#0CB05B'
+    fontWeight: '700'
   },
   graphRow: {
     flexDirection: 'row',
@@ -161,7 +164,6 @@ const styles = StyleSheet.create({
   },
   axisLabel: {
     fontSize: 12,
-    color: '#4F6F58',
     fontWeight: '600'
   },
   chartContainer: {
@@ -173,17 +175,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between'
   },
   label: {
-    fontSize: 12,
-    color: '#7A8A80'
+    fontSize: 12
   },
   empty: {
     paddingVertical: 40,
     alignItems: 'center'
   },
   emptyText: {
-    fontSize: 14,
-    color: '#7A8A80'
+    fontSize: 14
   }
 });
 
 export default SalesChartCard;
+
+
