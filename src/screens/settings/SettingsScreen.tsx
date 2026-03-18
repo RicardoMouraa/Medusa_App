@@ -14,6 +14,7 @@ import { useToast } from '@/hooks/useToast';
 import { useDashboard, getAvailableDashboards } from '@/hooks/useDashboard';
 import type { DashboardId } from '@/types/dashboard';
 import { useAuth } from '@/context/AuthContext';
+import { sendExpoPushTestNotificationAsync } from '@/services/notifications';
 
 const SettingsScreen: React.FC = () => {
   const {
@@ -91,12 +92,39 @@ const SettingsScreen: React.FC = () => {
     const token = await refreshPushToken();
     showToast({
       type: token ? 'success' : 'info',
-      text1: token ? 'Push configurado' : 'Permissão necessária',
+      text1: token ? 'Push configurado' : 'Permissao necessaria',
       text2: token
-        ? 'Suas notificações push foram atualizadas.'
-        : 'Autorize notificações nas configurações do dispositivo.'
+        ? 'Suas notificacoes push foram atualizadas.'
+        : 'Autorize notificacoes no dispositivo e use aparelho fisico.'
     });
   }, [refreshPushToken, showToast]);
+
+  const handlePushTest = useCallback(async () => {
+    const token = preferences.expoPushToken ?? (await refreshPushToken());
+    if (!token) {
+      showToast({
+        type: 'info',
+        text1: 'Token de push indisponivel',
+        text2: 'Valide as permissoes de notificacao no dispositivo.'
+      });
+      return;
+    }
+
+    try {
+      await sendExpoPushTestNotificationAsync(token);
+      showToast({
+        type: 'success',
+        text1: 'Push de teste enviado',
+        text2: 'Confira se a notificacao chegou no aparelho.'
+      });
+    } catch (error) {
+      showToast({
+        type: 'error',
+        text1: 'Falha ao enviar push de teste',
+        text2: error instanceof Error ? error.message : undefined
+      });
+    }
+  }, [preferences.expoPushToken, refreshPushToken, showToast]);
 
   return (
     <View style={styles.container}>
@@ -217,6 +245,7 @@ const SettingsScreen: React.FC = () => {
 
         <PrimaryButton label="Sincronizar com o painel" onPress={handleForceSync} variant="outline" />
         <PrimaryButton label="Atualizar push notifications" onPress={handlePushRegistration} variant="outline" />
+        <PrimaryButton label="Enviar push de teste (Expo)" onPress={handlePushTest} variant="outline" />
       </ScrollView>
     </View>
   );
@@ -280,3 +309,4 @@ const styles = StyleSheet.create({
 });
 
 export default SettingsScreen;
+

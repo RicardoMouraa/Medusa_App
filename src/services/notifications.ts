@@ -18,6 +18,7 @@ type NotificationPayload = Record<string, unknown> & {
 
 let currentPreferences: NotificationPreferences | null = null;
 let templateKey: NotificationTemplateKey = 'default';
+const EXPO_PUSH_ENDPOINT = 'https://exp.host/--/api/v2/push/send';
 
 Notifications.setNotificationHandler({
   handleNotification: async (notification) => {
@@ -103,6 +104,37 @@ export const registerForPushNotificationsAsync = async (): Promise<string | null
     projectId ? { projectId } : undefined
   );
   return token.data;
+};
+
+export const sendExpoPushTestNotificationAsync = async (expoPushToken: string) => {
+  const response = await fetch(EXPO_PUSH_ENDPOINT, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Accept-encoding': 'gzip, deflate',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      to: expoPushToken,
+      title: 'Medusa Pay',
+      body: 'Push configurado com sucesso.',
+      sound: 'default',
+      data: {
+        type: 'sale',
+        orderId: `test-${Date.now()}`,
+        paymentMethod: 'pix'
+      }
+    })
+  });
+
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(
+      `Expo push test failed (${response.status}): ${JSON.stringify(payload)}`
+    );
+  }
+
+  return payload;
 };
 
 export const subscribeToNotifications = (

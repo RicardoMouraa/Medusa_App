@@ -19,6 +19,7 @@ import {
   registerForPushNotificationsAsync,
   updateNotificationPreferences
 } from '@/services/notifications';
+import { saveUserExpoPushToken } from '@/services/pushRegistry';
 import { darkTheme, lightTheme, buildNavigationTheme, MedusaTheme } from '@/theme';
 import { NotificationPreferences, UserPreferencesResponse } from '@/types/api';
 
@@ -98,6 +99,8 @@ export const PreferencesProvider: React.FC<React.PropsWithChildren> = ({ childre
   const isHydratedRef = useRef(false);
   const suppressRemoteSyncRef = useRef(false);
   const remoteSyncTimeout = useRef<NodeJS.Timeout | null>(null);
+  const hasAttemptedPushPromptRef = useRef(false);
+  const lastSyncedPushKeyRef = useRef<string | null>(null);
   const storageKey = useMemo(
     () => `${STORAGE_KEYS.preferences}:${user?.uid ?? 'guest'}`,
     [user?.uid]
@@ -301,7 +304,6 @@ export const PreferencesProvider: React.FC<React.PropsWithChildren> = ({ childre
   );
 
   const refreshPushToken = useCallback(async () => {
-    if (!user) return null;
     try {
       const token = await registerForPushNotificationsAsync();
       if (token) {
@@ -312,20 +314,49 @@ export const PreferencesProvider: React.FC<React.PropsWithChildren> = ({ childre
           }),
           { skipRemoteSync: false }
         );
+        if (user?.uid) {
+          await saveUserExpoPushToken(user.uid, token);
+        }
       }
       return token;
     } catch (error) {
       console.error('[Preferences] Failed to register push token', error);
       return null;
     }
-  }, [applyPreferences, user]);
+  }, [applyPreferences, user?.uid]);
 
   useEffect(() => {
-    if (!isHydratedRef.current || !user) return;
+    if (!user) {
+      lastSyncedPushKeyRef.current = null;
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (!isHydratedRef.current) return;
+    if (hasAttemptedPushPromptRef.current) return;
+    hasAttemptedPushPromptRef.current = true;
+
     if (!preferences.expoPushToken) {
       void refreshPushToken();
     }
-  }, [preferences.expoPushToken, refreshPushToken, user]);
+  }, [preferences.expoPushToken, refreshPushToken]);
+
+  useEffect(() => {
+    if (!isHydratedRef.current || !user?.uid || !preferences.expoPushToken) return;
+
+    const syncKey = `${user.uid}:${preferences.expoPushToken}`;
+    if (lastSyncedPushKeyRef.current === syncKey) return;
+    lastSyncedPushKeyRef.current = syncKey;
+
+    void (async () => {
+      try {
+        await saveUserExpoPushToken(user.uid, preferences.expoPushToken as string);
+        scheduleRemoteSync(preferences);
+      } catch (error) {
+        console.error('[Preferences] Failed to sync push token with backend', error);
+      }
+    })();
+  }, [preferences, preferences.expoPushToken, scheduleRemoteSync, user?.uid]);
 
   const theme = preferences.theme === 'dark' ? darkTheme : lightTheme;
   const navigationTheme = buildNavigationTheme(theme);

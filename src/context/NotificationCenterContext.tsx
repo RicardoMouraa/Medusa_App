@@ -2,7 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { ApiError, OrderSummary } from '@/types/api';
-import { sendLocalNotification } from '@/services/notifications';
+import { sendLocalNotification, subscribeToNotifications } from '@/services/notifications';
 import { useDashboard } from '@/hooks/useDashboard';
 import { getTransactions } from '@/services/medusaApi';
 import { useAuth } from '@/context/AuthContext';
@@ -11,6 +11,15 @@ const STORAGE_KEY_PREFIX = '@medusa_read_notifications_v1';
 const DEFAULT_POLL_INTERVAL_MS = 20000;
 const RATE_LIMIT_BACKOFF_MS = 120000;
 const MAX_POLL_INTERVAL_MS = 5 * 60 * 1000;
+
+const toSafeAmount = (value: unknown) => {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const parsed = Number(value.replace(/[^\d.-]/g, ''));
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+};
 
 type SaleNotification = {
   id: string;
@@ -103,6 +112,51 @@ export const NotificationCenterProvider: React.FC<React.PropsWithChildren> = ({ 
     },
     [readIds]
   );
+
+  useEffect(() => {
+    const unsubscribe = subscribeToNotifications((notification) => {
+      const data = notification.request.content.data as Record<string, unknown>;
+      const type = String(data?.type ?? '');
+      if (!['sale', 'pix_paid', 'pix_generated'].includes(type)) {
+        return;
+      }
+
+      const id = String(
+        data.orderId ??
+          data.transactionId ??
+          notification.request.identifier ??
+          `push-${Date.now()}`
+      );
+      const amount = toSafeAmount(data.amount);
+      const paymentMethod =
+        typeof data.paymentMethod === 'string'
+          ? data.paymentMethod
+          : type.includes('pix')
+            ? 'Pix'
+            : undefined;
+
+      seenIdsRef.current.add(id);
+      setNotifications((prev) => {
+        const map = new Map<string, SaleNotification>();
+        [...prev, {
+          id,
+          amount,
+          paymentMethod,
+          createdAt: new Date().toISOString(),
+          customerName:
+            typeof data.customer === 'string' ? data.customer : undefined,
+          isRead: readIds.has(id)
+        }].forEach((entry) => {
+          map.set(entry.id, { ...entry, isRead: readIds.has(entry.id) });
+        });
+        return Array.from(map.values()).sort(
+          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+      });
+    });
+
+    return unsubscribe;
+  }, [readIds]);
 
   useEffect(() => {
     if (!secretKey) {
