@@ -91,6 +91,20 @@ const mergePreferences = (
 const determineTemplateKey = (notifications: NotificationPreferences) =>
   notifications.models.creative ? 'creative' : 'default';
 
+const isFirebasePermissionError = (error: unknown) => {
+  if (typeof error !== 'object' || !error || !('code' in error)) return false;
+  const code = String((error as { code?: unknown }).code ?? '');
+  return code.includes('permission-denied');
+};
+
+const logPushSyncError = (message: string, error: unknown) => {
+  if (isFirebasePermissionError(error)) {
+    console.warn(`${message}. Firebase sem permissao para gravar token agora.`);
+    return;
+  }
+  console.warn(message, error);
+};
+
 export const PreferencesProvider: React.FC<React.PropsWithChildren> = ({ children }) => {
   const { user } = useAuth();
   const [preferences, setPreferences] = useState<PreferencesState>(defaultState);
@@ -306,21 +320,30 @@ export const PreferencesProvider: React.FC<React.PropsWithChildren> = ({ childre
   const refreshPushToken = useCallback(async () => {
     try {
       const token = await registerForPushNotificationsAsync();
-      if (token) {
-        applyPreferences(
-          (current) => ({
-            ...current,
-            expoPushToken: token
-          }),
-          { skipRemoteSync: false }
-        );
-        if (user?.uid) {
+      if (!token) return null;
+
+      applyPreferences(
+        (current) => ({
+          ...current,
+          expoPushToken: token
+        }),
+        { skipRemoteSync: false }
+      );
+
+      if (user?.uid) {
+        try {
           await saveUserExpoPushToken(user.uid, token);
+        } catch (error) {
+          logPushSyncError(
+            '[Preferences] Push token gerado, mas nao foi possivel salvar no backend',
+            error
+          );
         }
       }
+
       return token;
     } catch (error) {
-      console.error('[Preferences] Failed to register push token', error);
+      console.warn('[Preferences] Failed to register push token', error);
       return null;
     }
   }, [applyPreferences, user?.uid]);
@@ -351,9 +374,10 @@ export const PreferencesProvider: React.FC<React.PropsWithChildren> = ({ childre
     void (async () => {
       try {
         await saveUserExpoPushToken(user.uid, preferences.expoPushToken as string);
-        scheduleRemoteSync(preferences);
       } catch (error) {
-        console.error('[Preferences] Failed to sync push token with backend', error);
+        logPushSyncError('[Preferences] Failed to sync push token with backend', error);
+      } finally {
+        scheduleRemoteSync(preferences);
       }
     })();
   }, [preferences, preferences.expoPushToken, scheduleRemoteSync, user?.uid]);

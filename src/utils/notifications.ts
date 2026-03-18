@@ -10,74 +10,107 @@ export type NotificationType =
   | 'withdraw'
   | 'generic';
 
+type NotificationPayload = Record<string, unknown>;
+
 export type NotificationTemplate = {
-  title: string;
-  body: (payload: Record<string, unknown>) => string;
+  title: string | ((payload: NotificationPayload) => string);
+  body: (payload: NotificationPayload) => string;
 };
 
 type TemplateDictionary = Record<NotificationType, NotificationTemplate>;
 
+const pickVariant = (variants: string[]) =>
+  variants[Math.floor(Math.random() * variants.length)];
+
+const formatAmount = (value: unknown) => `Valor ${formatCurrencyBRL(Number(value) || 0)}`;
+
+const resolvePaymentMethod = (paymentMethod: unknown) => {
+  if (typeof paymentMethod !== 'string') return 'Venda';
+  const normalized = paymentMethod.toLowerCase();
+  if (normalized.includes('pix')) return 'Pix';
+  if (normalized.includes('boleto')) return 'Boleto';
+  if (normalized.includes('cart') || normalized.includes('credito') || normalized.includes('credit')) {
+    return 'Cartao';
+  }
+  return 'Venda';
+};
+
+const saleCreativeTitles = [
+  '🎉 Sabe o que acabou de pingar, ne?',
+  '💸 Calma Elon Musk to chegando',
+  '🚀 Venda nova no painel agora',
+  '🔥 Mais uma venda confirmada',
+  '🪼 Medusa avisou: entrou valor'
+];
+
+const pixGeneratedCreativeTitles = [
+  '⚡ Novo Pix gerado! Estamos na torcida...',
+  '📲 Pix gerado, sera que vao pagar?',
+  '🪼 Seu cliente acabou de gerar um PIX',
+  '💚 Pix novinho pronto para pagamento',
+  '🔔 Pix criado com sucesso agora'
+];
+
+const boletoGeneratedCreativeTitles = [
+  '🧾 Boleto emitido com sucesso',
+  '📬 Boleto novo no radar',
+  '🎯 Mais um boleto foi gerado',
+  '💼 Boleto criado e aguardando pagamento',
+  '🪼 Boleto pronto no seu painel'
+];
+
 export const NOTIFICATION_TEMPLATES: Record<NotificationTemplateKey, TemplateDictionary> = {
   default: {
     sale: {
-      title: 'Nova venda aprovada',
-      body: ({ amount }) =>
-        `Sabe o que acabou de pingar, né? 💸 ${formatCurrencyBRL(Number(amount) || 0)} confirmado.`
+      title: ({ paymentMethod }) => `${resolvePaymentMethod(paymentMethod)} aprovado`,
+      body: ({ amount }) => formatAmount(amount)
     },
     pix_generated: {
       title: 'Pix gerado',
-      body: ({ amount }) =>
-        `Novo Pix gerado! Estamos na torcida pelos ${formatCurrencyBRL(Number(amount) || 0)}.`
+      body: ({ amount }) => formatAmount(amount)
     },
     pix_paid: {
       title: 'Pix pago',
-      body: ({ amount }) =>
-        `Pix pago com sucesso! ${formatCurrencyBRL(Number(amount) || 0)} já disponível pra você.`
+      body: ({ amount }) => formatAmount(amount)
     },
     boleto_generated: {
-      title: 'Boleto emitido',
-      body: ({ amount }) =>
-        `Novo boleto saindo do forno 🔥 Valor: ${formatCurrencyBRL(Number(amount) || 0)}.`
+      title: 'Boleto gerado',
+      body: ({ amount }) => formatAmount(amount)
     },
     withdraw: {
-      title: 'Solicitação de saque',
-      body: ({ amount }) =>
-        `Pedido de saque recebido. Acompanhe ${formatCurrencyBRL(Number(amount) || 0)} no histórico.`
+      title: 'Solicitacao de saque',
+      body: ({ amount }) => formatAmount(amount)
     },
     generic: {
-      title: 'MedusaPay',
-      body: ({ message }) => String(message ?? 'Você tem uma atualização na MedusaPay.')
+      title: 'Medusa Pay',
+      body: ({ message }) => String(message ?? 'Voce recebeu uma nova notificacao.')
     }
   },
   creative: {
     sale: {
-      title: 'Ka-ching!',
-      body: ({ amount }) =>
-        `Calma Elon Musk, tô chegando 🚀 Entrada de ${formatCurrencyBRL(Number(amount) || 0)}!`
-      },
+      title: () => pickVariant(saleCreativeTitles),
+      body: ({ amount, paymentMethod }) =>
+        `${formatAmount(amount)} • ${resolvePaymentMethod(paymentMethod)}`
+    },
     pix_generated: {
-      title: 'Pix novinho na área',
-      body: ({ amount }) =>
-        `Fica de olho: Pix gerado em ${formatCurrencyBRL(Number(amount) || 0)}. Logo cai.`
+      title: () => pickVariant(pixGeneratedCreativeTitles),
+      body: ({ amount }) => formatAmount(amount)
     },
     pix_paid: {
-      title: 'Pix confirmado 💚',
-      body: ({ amount }) =>
-        `É sobre isso! ${formatCurrencyBRL(Number(amount) || 0)} já tá na conta.`
+      title: () => pickVariant(['✅ Pix caiu!', '💚 Pix confirmado!', '⚡ Pix pago no ato!', '🪼 Pix entrou!', '🎯 Pix compensado!']),
+      body: ({ amount }) => formatAmount(amount)
     },
     boleto_generated: {
-      title: 'Boleto na pista',
-      body: ({ amount }) =>
-        `Amarro outro boleto? 😎 Valor de ${formatCurrencyBRL(Number(amount) || 0)} liberado.`
+      title: () => pickVariant(boletoGeneratedCreativeTitles),
+      body: ({ amount }) => formatAmount(amount)
     },
     withdraw: {
-      title: 'Saque na esteira',
-      body: ({ amount }) =>
-        `Pix indo com carinho ❤️ Valor de ${formatCurrencyBRL(Number(amount) || 0)} a caminho.`
+      title: () => pickVariant(['🏦 Saque solicitado', '📤 Saque em processamento', '🪼 Saque no fluxo', '💸 Pedido de saque recebido', '⏳ Saque em andamento']),
+      body: ({ amount }) => formatAmount(amount)
     },
     generic: {
-      title: 'MedusaPay',
-      body: ({ message }) => String(message ?? 'Chegou novidade quente na MedusaPay 🔥')
+      title: () => pickVariant(['🪼 Medusa Pay', '🔔 Medusa Pay', '⚡ Medusa Pay', '💚 Medusa Pay', '🎉 Medusa Pay']),
+      body: ({ message }) => String(message ?? 'Chegou novidade no app.')
     }
   }
 };

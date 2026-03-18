@@ -7,6 +7,7 @@ import React, {
   useRef,
   useState
 } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FirebaseError } from 'firebase/app';
 import {
   User,
@@ -30,7 +31,14 @@ import {
 } from 'firebase/firestore';
 
 import { auth, db } from '@/services/firebase';
-import { clearPasskeys, readPasskeys, writePasskeys } from '@/services/secureStore';
+import {
+  clearAuthSession,
+  readAuthSession,
+  readPasskeys,
+  writeAuthSession,
+  writePasskeys
+} from '@/services/secureStore';
+import { STORAGE_KEYS } from '@/constants/storageKeys';
 
 type FirestoreUserDoc = {
   uid: string;
@@ -62,6 +70,12 @@ type SignUpPayload = {
   password: string;
 };
 
+type SessionSnapshot = {
+  uid: string;
+  createdAt: string;
+  expiresAt: string;
+};
+
 type AuthContextValue = {
   user: User | null;
   profile: AuthUserProfile | null;
@@ -83,6 +97,9 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 const fallbackName = (name?: string | null) => (name && name.trim().length > 0 ? name.trim() : 'Usuario');
+
+const SESSION_TTL_DAYS = 7;
+const SESSION_TTL_MS = SESSION_TTL_DAYS * 24 * 60 * 60 * 1000;
 
 const normalizeTimestamp = (value?: Timestamp | string | null) => {
   if (!value) return null;
@@ -150,12 +167,67 @@ const mapFirebaseError = (error: unknown) => {
   return 'Ocorreu um erro inesperado. Tente novamente.';
 };
 
+const readSessionSnapshot = async (): Promise<SessionSnapshot | null> => {
+  try {
+    const raw = await AsyncStorage.getItem(STORAGE_KEYS.session);
+    return raw ? (JSON.parse(raw) as SessionSnapshot) : null;
+  } catch (error) {
+    console.warn('[Auth] Failed to read session snapshot', error);
+    return null;
+  }
+};
+
+const writeSessionSnapshot = async (uid: string): Promise<SessionSnapshot> => {
+  const now = Date.now();
+  const snapshot: SessionSnapshot = {
+    uid,
+    createdAt: new Date(now).toISOString(),
+    expiresAt: new Date(now + SESSION_TTL_MS).toISOString()
+  };
+  try {
+    await AsyncStorage.setItem(STORAGE_KEYS.session, JSON.stringify(snapshot));
+  } catch (error) {
+    console.warn('[Auth] Failed to persist session snapshot', error);
+  }
+  return snapshot;
+};
+
+const clearSessionSnapshot = async () => {
+  try {
+    await AsyncStorage.removeItem(STORAGE_KEYS.session);
+  } catch (error) {
+    console.warn('[Auth] Failed to clear session snapshot', error);
+  }
+};
+
+const isSessionExpired = (snapshot: SessionSnapshot, uid: string) => {
+  if (!snapshot || snapshot.uid !== uid) return false;
+  const expiresAt = new Date(snapshot.expiresAt).getTime();
+  if (!Number.isFinite(expiresAt)) return false;
+  return Date.now() > expiresAt;
+};
+
+const persistAuthSessionCredentials = async (
+  uid: string,
+  email: string,
+  password: string,
+  expiresAt: string
+) => {
+  await writeAuthSession({
+    uid,
+    email: email.trim(),
+    password,
+    expiresAt
+  });
+};
+
 export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<AuthUserProfile | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
   const [isProfileReady, setIsProfileReady] = useState(false);
   const lastKnownUidRef = useRef<string | null>(null);
+  const hasAttemptedAutoSignInRef = useRef(false);
 
   const getProfile = useCallback(async (uid: string) => {
     const ref = doc(db, 'users', uid);
@@ -223,14 +295,60 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
       if (firebaseUser) {
+        hasAttemptedAutoSignInRef.current = true;
         lastKnownUidRef.current = firebaseUser.uid;
+        const snapshot = await readSessionSnapshot();
+        if (snapshot && isSessionExpired(snapshot, firebaseUser.uid)) {
+          await clearSessionSnapshot();
+          await clearAuthSession();
+          await firebaseSignOut(auth);
+          setProfile(null);
+          setIsProfileReady(true);
+          setIsInitializing(false);
+          return;
+        }
+
+        const nextSnapshot = await writeSessionSnapshot(firebaseUser.uid);
+        const savedAuthSession = await readAuthSession();
+        if (savedAuthSession && savedAuthSession.uid === firebaseUser.uid) {
+          await writeAuthSession({
+            ...savedAuthSession,
+            expiresAt: nextSnapshot.expiresAt
+          });
+        }
+
         setIsProfileReady(false);
         await ensureUserDocument(firebaseUser);
       } else {
-        if (lastKnownUidRef.current) {
-          await clearPasskeys(lastKnownUidRef.current);
-          lastKnownUidRef.current = null;
+        if (!hasAttemptedAutoSignInRef.current) {
+          hasAttemptedAutoSignInRef.current = true;
+          const snapshot = await readSessionSnapshot();
+          const savedAuthSession = await readAuthSession();
+          const authSessionExpired = savedAuthSession
+            ? new Date(savedAuthSession.expiresAt).getTime() <= Date.now()
+            : true;
+
+          const canRestoreFromSecureSession =
+            savedAuthSession &&
+            !authSessionExpired &&
+            (!snapshot || snapshot.uid === savedAuthSession.uid);
+
+          if (canRestoreFromSecureSession) {
+            try {
+              await signInWithEmailAndPassword(auth, savedAuthSession.email, savedAuthSession.password);
+              return;
+            } catch (error) {
+              console.warn('[Auth] Failed to auto sign in from secure session', error);
+              await clearSessionSnapshot();
+              await clearAuthSession();
+            }
+          } else if (snapshot && isSessionExpired(snapshot, snapshot.uid)) {
+            await clearSessionSnapshot();
+            await clearAuthSession();
+          }
         }
+
+        lastKnownUidRef.current = null;
         setProfile(null);
         setIsProfileReady(true);
       }
@@ -242,7 +360,10 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
 
   const signIn = useCallback(async (email: string, password: string) => {
     try {
-      const { user: firebaseUser } = await signInWithEmailAndPassword(auth, email.trim(), password);
+      const normalizedEmail = email.trim();
+      const { user: firebaseUser } = await signInWithEmailAndPassword(auth, normalizedEmail, password);
+      const snapshot = await writeSessionSnapshot(firebaseUser.uid);
+      await persistAuthSessionCredentials(firebaseUser.uid, normalizedEmail, password, snapshot.expiresAt);
       await ensureUserDocument(firebaseUser);
     } catch (error) {
       throw new Error(mapFirebaseError(error));
@@ -251,22 +372,28 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
 
   const signUp = useCallback(async ({ name, email, password }: SignUpPayload) => {
     try {
-      const credential = await createUserWithEmailAndPassword(auth, email.trim(), password);
+      const normalizedEmail = email.trim();
+      const credential = await createUserWithEmailAndPassword(auth, normalizedEmail, password);
       if (name.trim()) {
         await updateProfile(credential.user, { displayName: name.trim() });
       }
-      await ensureUserDocument(credential.user, { name: name.trim(), email: email.trim() });
+      const snapshot = await writeSessionSnapshot(credential.user.uid);
+      await persistAuthSessionCredentials(
+        credential.user.uid,
+        normalizedEmail,
+        password,
+        snapshot.expiresAt
+      );
+      await ensureUserDocument(credential.user, { name: name.trim(), email: normalizedEmail });
     } catch (error) {
       throw new Error(mapFirebaseError(error));
     }
   }, [ensureUserDocument]);
 
   const signOut = useCallback(async () => {
-    const uid = auth.currentUser?.uid;
     await firebaseSignOut(auth);
-    if (uid) {
-      await clearPasskeys(uid);
-    }
+    await clearSessionSnapshot();
+    await clearAuthSession();
     setProfile(null);
     setIsProfileReady(true);
   }, []);

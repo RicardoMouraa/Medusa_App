@@ -62,6 +62,11 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     favicon: './assets/favicon.png'
   },
 
+  notification: {
+    icon: './assets/icon-notificação-0.png',
+    color: '#06A852'
+  },
+
   extra: {
     enableFirebaseAnalytics,
     eas: {
@@ -70,7 +75,14 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
 
   plugins: [
-    'expo-notifications'
+    [
+      'expo-notifications',
+      {
+        icon: './assets/icon-notificação-0.png',
+        color: '#06A852',
+        defaultChannel: 'default'
+      }
+    ]
   ]
 });
 

@@ -14,7 +14,24 @@ import { useToast } from '@/hooks/useToast';
 import { useDashboard, getAvailableDashboards } from '@/hooks/useDashboard';
 import type { DashboardId } from '@/types/dashboard';
 import { useAuth } from '@/context/AuthContext';
-import { sendExpoPushTestNotificationAsync } from '@/services/notifications';
+import { sendExpoPushTestNotificationAsync, sendLocalNotification } from '@/services/notifications';
+import type { NotificationType } from '@/utils/notifications';
+
+type LocalTestScenario = {
+  type: NotificationType;
+  paymentMethod: 'cartao' | 'pix' | 'boleto';
+  customer: string;
+};
+
+const LOCAL_TEST_SCENARIOS: LocalTestScenario[] = [
+  { type: 'sale', paymentMethod: 'cartao', customer: 'Cliente cartao' },
+  { type: 'sale', paymentMethod: 'pix', customer: 'Cliente pix' },
+  { type: 'sale', paymentMethod: 'boleto', customer: 'Cliente boleto' },
+  { type: 'pix_generated', paymentMethod: 'pix', customer: 'Cliente pix' },
+  { type: 'boleto_generated', paymentMethod: 'boleto', customer: 'Cliente boleto' }
+];
+
+const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 const SettingsScreen: React.FC = () => {
   const {
@@ -34,6 +51,9 @@ const SettingsScreen: React.FC = () => {
   const { showToast } = useToast();
   const dashboards = useMemo(() => getAvailableDashboards(), []);
   const dashboardAliases: Partial<Record<DashboardId, string>> = preferences.dashboardAliases ?? {};
+  const activeTemplateModel = preferences.notifications.models.creative ? 'creative' : 'default';
+
+  const randomTestAmount = useCallback(() => Number((Math.random() * 800 + 20).toFixed(2)), []);
 
   const handleThemeToggle = useCallback(
     (value: boolean) => {
@@ -111,7 +131,11 @@ const SettingsScreen: React.FC = () => {
     }
 
     try {
-      await sendExpoPushTestNotificationAsync(token);
+      await sendExpoPushTestNotificationAsync(token, {
+        type: 'sale',
+        amount: randomTestAmount(),
+        templateKey: activeTemplateModel
+      });
       showToast({
         type: 'success',
         text1: 'Push de teste enviado',
@@ -124,7 +148,42 @@ const SettingsScreen: React.FC = () => {
         text2: error instanceof Error ? error.message : undefined
       });
     }
-  }, [preferences.expoPushToken, refreshPushToken, showToast]);
+  }, [activeTemplateModel, preferences.expoPushToken, randomTestAmount, refreshPushToken, showToast]);
+
+  const handleLocalPushSuiteTest = useCallback(
+    async (model: 'default' | 'creative') => {
+      try {
+        for (const scenario of LOCAL_TEST_SCENARIOS) {
+          await sendLocalNotification(
+            scenario.type,
+            {
+              amount: randomTestAmount(),
+              customer: scenario.customer,
+              paymentMethod: scenario.paymentMethod
+            },
+            {
+              templateKey: model,
+              bypassTypeFilter: true
+            }
+          );
+          await wait(120);
+        }
+
+        showToast({
+          type: 'success',
+          text1: `Teste completo (${model === 'creative' ? 'criativo' : 'padrao'}) enviado`,
+          text2: 'Geramos notificacoes para cartao, pix, boleto, pix gerado e boleto gerado.'
+        });
+      } catch (error) {
+        showToast({
+          type: 'error',
+          text1: 'Falha ao gerar notificacoes de teste',
+          text2: error instanceof Error ? error.message : undefined
+        });
+      }
+    },
+    [randomTestAmount, showToast]
+  );
 
   return (
     <View style={styles.container}>
@@ -156,7 +215,10 @@ const SettingsScreen: React.FC = () => {
         </Card>
 
         <Card style={styles.section}>
-          <SectionTitle title="Modelos de notificação" caption="Personalize o tom da mensagem" />
+          <SectionTitle
+            title="Modelos de notificação"
+            caption="Padrão = objetivo | Criativa = linguagem descontraída"
+          />
           <ToggleRow
             label="Notificação padrão"
             value={preferences.notifications.models.default}
@@ -246,6 +308,20 @@ const SettingsScreen: React.FC = () => {
         <PrimaryButton label="Sincronizar com o painel" onPress={handleForceSync} variant="outline" />
         <PrimaryButton label="Atualizar push notifications" onPress={handlePushRegistration} variant="outline" />
         <PrimaryButton label="Enviar push de teste (Expo)" onPress={handlePushTest} variant="outline" />
+        <PrimaryButton
+          label="Rodar teste completo (padrao)"
+          onPress={() => {
+            void handleLocalPushSuiteTest('default');
+          }}
+          variant="outline"
+        />
+        <PrimaryButton
+          label="Rodar teste completo (criativa)"
+          onPress={() => {
+            void handleLocalPushSuiteTest('creative');
+          }}
+          variant="outline"
+        />
       </ScrollView>
     </View>
   );

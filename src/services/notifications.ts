@@ -6,6 +6,7 @@ import Constants from 'expo-constants';
 import { NotificationPreferences } from '@/types/api';
 import {
   NOTIFICATION_TEMPLATES,
+  NotificationTemplate,
   NotificationTemplateKey,
   NotificationType
 } from '@/utils/notifications';
@@ -16,9 +17,24 @@ type NotificationPayload = Record<string, unknown> & {
   customer?: string;
 };
 
+type LocalNotificationOptions = {
+  templateKey?: NotificationTemplateKey;
+  bypassTypeFilter?: boolean;
+};
+
+type ExpoPushTestOptions = {
+  type?: NotificationType;
+  amount?: number;
+  templateKey?: NotificationTemplateKey;
+  paymentMethod?: string;
+  customer?: string;
+};
+
 let currentPreferences: NotificationPreferences | null = null;
 let templateKey: NotificationTemplateKey = 'default';
 const EXPO_PUSH_ENDPOINT = 'https://exp.host/--/api/v2/push/send';
+const MEDUSA_NOTIFICATION_IMAGE_URL =
+  'https://raw.githubusercontent.com/RicardoMouraa/Medusa_App/main/assets/icon-notifica%C3%A7%C3%A3o-0.png';
 
 Notifications.setNotificationHandler({
   handleNotification: async (notification) => {
@@ -36,6 +52,9 @@ Notifications.setNotificationHandler({
 
 const getTemplate = (key: NotificationTemplateKey, type: NotificationType) =>
   NOTIFICATION_TEMPLATES[key][type] ?? NOTIFICATION_TEMPLATES.default.generic;
+
+const resolveTemplateTitle = (template: NotificationTemplate, payload: Record<string, unknown>) =>
+  typeof template.title === 'function' ? template.title(payload) : template.title;
 
 const shouldDisplayByType = (type: NotificationType) => {
   if (!currentPreferences) return true;
@@ -106,7 +125,23 @@ export const registerForPushNotificationsAsync = async (): Promise<string | null
   return token.data;
 };
 
-export const sendExpoPushTestNotificationAsync = async (expoPushToken: string) => {
+export const sendExpoPushTestNotificationAsync = async (
+  expoPushToken: string,
+  options: ExpoPushTestOptions = {}
+) => {
+  const type = options.type ?? 'sale';
+  const amount = options.amount ?? 189.9;
+  const activeTemplate = options.templateKey ?? templateKey;
+  const template = getTemplate(activeTemplate, type);
+  const payloadData = {
+    type,
+    amount,
+    orderId: `test-${Date.now()}`,
+    paymentMethod:
+      options.paymentMethod ?? (type.includes('pix') ? 'pix' : type.includes('boleto') ? 'boleto' : 'cartao'),
+    customer: options.customer ?? 'Cliente teste'
+  };
+
   const response = await fetch(EXPO_PUSH_ENDPOINT, {
     method: 'POST',
     headers: {
@@ -116,13 +151,15 @@ export const sendExpoPushTestNotificationAsync = async (expoPushToken: string) =
     },
     body: JSON.stringify({
       to: expoPushToken,
-      title: 'Medusa Pay',
-      body: 'Push configurado com sucesso.',
+      title: resolveTemplateTitle(template, payloadData),
+      body: template.body(payloadData),
       sound: 'default',
       data: {
-        type: 'sale',
-        orderId: `test-${Date.now()}`,
-        paymentMethod: 'pix'
+        ...payloadData,
+        iconUrl: MEDUSA_NOTIFICATION_IMAGE_URL
+      },
+      richContent: {
+        image: MEDUSA_NOTIFICATION_IMAGE_URL
       }
     })
   });
@@ -149,6 +186,7 @@ export const subscribeToNotifications = (
     }
 
     const template = getTemplate(templateKey, type);
+    const resolvedTitle = resolveTemplateTitle(template, data);
     const body = notification.request.content.body ?? template.body(data);
 
     listener({
@@ -157,7 +195,7 @@ export const subscribeToNotifications = (
         ...notification.request,
         content: {
           ...notification.request.content,
-          title: notification.request.content.title ?? template.title,
+          title: notification.request.content.title ?? resolvedTitle,
           body
         }
       }
@@ -169,19 +207,31 @@ export const subscribeToNotifications = (
 
 export const sendLocalNotification = async (
   type: NotificationType,
-  payload: NotificationPayload = {}
+  payload: NotificationPayload = {},
+  options: LocalNotificationOptions = {}
 ) => {
-  if (!shouldDisplayByType(type)) return;
+  if (!options.bypassTypeFilter && !shouldDisplayByType(type)) return;
 
-  const template = getTemplate(templateKey, type);
+  const template = getTemplate(options.templateKey ?? templateKey, type);
+  const content: Notifications.NotificationContentInput & {
+    attachments?: Notifications.NotificationContentAttachmentIos[];
+  } = {
+    title: resolveTemplateTitle(template, payload),
+    body: template.body(payload),
+    data: { type, ...payload, iconUrl: MEDUSA_NOTIFICATION_IMAGE_URL },
+    sound: currentPreferences?.sound ? 'default' : undefined
+  };
+
+  content.attachments = [
+    {
+      identifier: 'medusa-logo',
+      url: MEDUSA_NOTIFICATION_IMAGE_URL,
+      type: 'public.png'
+    }
+  ];
 
   await Notifications.scheduleNotificationAsync({
-    content: {
-      title: template.title,
-      body: template.body(payload),
-      data: { type, ...payload },
-      sound: currentPreferences?.sound ? 'default' : undefined
-    },
+    content,
     trigger: null
   });
 };

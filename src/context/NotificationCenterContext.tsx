@@ -117,7 +117,7 @@ export const NotificationCenterProvider: React.FC<React.PropsWithChildren> = ({ 
     const unsubscribe = subscribeToNotifications((notification) => {
       const data = notification.request.content.data as Record<string, unknown>;
       const type = String(data?.type ?? '');
-      if (!['sale', 'pix_paid', 'pix_generated'].includes(type)) {
+      if (!['sale', 'pix_paid', 'pix_generated', 'boleto_generated'].includes(type)) {
         return;
       }
 
@@ -133,6 +133,8 @@ export const NotificationCenterProvider: React.FC<React.PropsWithChildren> = ({ 
           ? data.paymentMethod
           : type.includes('pix')
             ? 'Pix'
+            : type.includes('boleto')
+              ? 'Boleto'
             : undefined;
 
       seenIdsRef.current.add(id);
