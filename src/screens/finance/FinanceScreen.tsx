@@ -7,37 +7,40 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 
 import Card from '@/components/Card';
 import MedusaHeader from '@/components/MedusaHeader';
 import PrimaryButton from '@/components/PrimaryButton';
 import SectionTitle from '@/components/SectionTitle';
 import TextField from '@/components/TextField';
-import { useFocusEffect } from '@react-navigation/native';
-
 import { useAuth } from '@/context/AuthContext';
 import { usePreferences } from '@/context/PreferencesContext';
 import { useApiRequest } from '@/hooks/useApiRequest';
 import { useToast } from '@/hooks/useToast';
-import { getBalance, createTransfer, getTransactions } from '@/services/medusaApi';
 import { useDashboard } from '@/hooks/useDashboard';
-import { ApiError, BalanceResponse, OrderSummary, WithdrawRequestPayload } from '@/types/api';
+import { createTransfer, getBalance } from '@/services/medusaApi';
+import { sendLocalNotification } from '@/services/notifications';
+import { ApiError, BalanceResponse } from '@/types/api';
 import { formatCurrencyBRL } from '@/utils/format';
 import { maskCurrency, parseCurrencyToNumber } from '@/utils/validation';
-import { RESERVE_PERCENTAGE, sumNetBreakdown } from '@/utils/finance';
 
 const PIX_KEY_TYPES = [
   'CPF',
   'CNPJ',
   'E-mail',
   'Telefone',
-  'Chave aleatória',
+  'Chave aleatoria',
   'QR Code (copia e cola)'
 ] as const;
 
-type FinanceData = {
-  balance: BalanceResponse;
-  transactions: OrderSummary[];
+const PIX_KEY_TYPE_MAP: Record<(typeof PIX_KEY_TYPES)[number], string> = {
+  CPF: 'cpf',
+  CNPJ: 'cnpj',
+  'E-mail': 'email',
+  Telefone: 'phone',
+  'Chave aleatoria': 'evp',
+  'QR Code (copia e cola)': 'copypaste'
 };
 
 const FinanceScreen: React.FC = ({ navigation }: any) => {
@@ -56,10 +59,7 @@ const FinanceScreen: React.FC = ({ navigation }: any) => {
   const fetchFinanceData = useCallback(
     () =>
       secretKey
-        ? Promise.all([
-            getBalance(secretKey, { recipientId }, apiOptions),
-            getTransactions(secretKey, { count: 100 }, apiOptions)
-          ]).then(([balance, transactions]) => ({ balance, transactions }))
+        ? getBalance(secretKey, { recipientId }, apiOptions)
         : Promise.reject(
             new Error(`Informe ${definition.passkeyLabel} para acessar o ${displayLabel}.`)
           ),
@@ -71,12 +71,7 @@ const FinanceScreen: React.FC = ({ navigation }: any) => {
     isLoading,
     error,
     refetch
-  } = useApiRequest<FinanceData>(fetchFinanceData, [fetchFinanceData]);
-
-  const netBreakdown = useMemo(
-    () => (financeData ? sumNetBreakdown(financeData.transactions) : null),
-    [financeData?.transactions]
-  );
+  } = useApiRequest<BalanceResponse>(fetchFinanceData, [fetchFinanceData]);
 
   useFocusEffect(
     useCallback(() => {
@@ -85,11 +80,13 @@ const FinanceScreen: React.FC = ({ navigation }: any) => {
   );
 
   const withdrawFee =
-    financeData?.balance.withdrawFee && financeData.balance.withdrawFee > 0 ? financeData.balance.withdrawFee : 10;
-  const available = netBreakdown?.net ?? 0;
-  const netBeforeReserveTotal = netBreakdown?.netBeforeReserve ?? 0;
-  const reserveHoldTotal = netBreakdown?.reserveHold ?? 0;
-  const pending = financeData?.balance.pending ?? 0;
+    financeData?.withdrawFee && financeData.withdrawFee > 0 ? financeData.withdrawFee : 10;
+  const available = financeData?.available ?? 0;
+  const pending = financeData?.pending ?? 0;
+  const minimumWithdrawRequired = useMemo(
+    () => Math.max(withdrawFee, financeData?.minimumWithdraw ?? 0),
+    [financeData?.minimumWithdraw, withdrawFee]
+  );
 
   const handleAmountChange = useCallback((value: string) => {
     setWithdrawValue(maskCurrency(value));
@@ -97,49 +94,55 @@ const FinanceScreen: React.FC = ({ navigation }: any) => {
 
   const validate = useCallback(() => {
     const amount = parseCurrencyToNumber(withdrawValue);
-    if (!pixKey) {
+    const trimmedPixKey = pixKey.trim();
+
+    if (!trimmedPixKey) {
       showToast({
         type: 'error',
         text1: 'Informe a chave Pix',
-        text2: 'Para sacar precisamos da chave cadastrada.'
+        text2: 'Para solicitar o saque precisamos da chave de destino.'
       });
       return false;
     }
+
     if (amount <= 0) {
       showToast({
         type: 'error',
-        text1: 'Valor inválido',
+        text1: 'Valor invalido',
         text2: 'Digite um valor maior que zero.'
       });
       return false;
     }
+
+    if (amount <= withdrawFee) {
+      showToast({
+        type: 'error',
+        text1: 'Valor abaixo da taxa de saque',
+        text2: `Solicite um valor superior a ${formatCurrencyBRL(withdrawFee)}.`
+      });
+      return false;
+    }
+
+    if (minimumWithdrawRequired > 0 && amount < minimumWithdrawRequired) {
+      showToast({
+        type: 'error',
+        text1: 'Valor abaixo do minimo permitido',
+        text2: `O valor minimo para saque e ${formatCurrencyBRL(minimumWithdrawRequired)}.`
+      });
+      return false;
+    }
+
     if (amount > available) {
       showToast({
         type: 'error',
         text1: 'Saldo insuficiente',
-        text2: 'O valor solicitado é maior que o saldo disponível.'
+        text2: 'O valor solicitado e maior que o saldo disponivel para saque.'
       });
       return false;
     }
-    if (financeData?.balance.minimumWithdraw && amount < financeData.balance.minimumWithdraw) {
-      showToast({
-        type: 'error',
-        text1: 'Valor abaixo do mínimo',
-        text2: `O saque mínimo é de ${formatCurrencyBRL(financeData.balance.minimumWithdraw)}.`
-      });
-      return false;
-    }
-    return true;
-  }, [available, financeData?.balance.minimumWithdraw, pixKey, showToast, withdrawValue]);
 
-  const payload = useMemo<WithdrawRequestPayload>(() => {
-    const amount = parseCurrencyToNumber(withdrawValue);
-    return {
-      pixKeyType: selectedType,
-      pixKey,
-      amount
-    };
-  }, [pixKey, selectedType, withdrawValue]);
+    return true;
+  }, [available, minimumWithdrawRequired, pixKey, showToast, withdrawFee, withdrawValue]);
 
   const handleSubmit = useCallback(async () => {
     if (!validate()) return;
@@ -151,41 +154,63 @@ const FinanceScreen: React.FC = ({ navigation }: any) => {
         throw new Error(`Informe ${definition.passkeyLabel} para solicitar saques no ${displayLabel}.`);
       }
 
-      const amountInCents = Math.round(payload.amount * 100);
+      const amount = parseCurrencyToNumber(withdrawValue);
+      const amountInCents = Math.round(amount * 100);
 
       await createTransfer(
         secretKey,
         {
+          method: 'fiat',
           amount: amountInCents,
-          pixKey: payload.pixKey,
-          pixKeyType: payload.pixKeyType,
-          recipientId: recipientId ? Number(recipientId) : undefined
+          pixKey: pixKey.trim(),
+          pixKeyType: PIX_KEY_TYPE_MAP[selectedType],
+          netPayout: false
         },
         apiOptions
       );
+
       showToast({
         type: 'success',
-        text1: 'Transferencia criada',
-        text2: 'Acompanhe o status na aba de historico.'
+        text1: 'Saque solicitado com sucesso',
+        text2: 'Acompanhe o status na aba de historico de saques.'
       });
+
+      try {
+        await sendLocalNotification('withdraw', { amount });
+      } catch (notificationError) {
+        console.warn('[Finance] Failed to send local withdraw notification', notificationError);
+      }
 
       setPixKey('');
       setWithdrawValue('');
       await refetch();
     } catch (err) {
       const apiError = err as ApiError;
+      const rawMessage = apiError?.message ?? 'Nao foi possivel solicitar o saque.';
+      const helpMessage = rawMessage.toLowerCase().includes('withdraw')
+        ? `${rawMessage} Verifique no painel da Medusa se a funcionalidade de saque via API esta habilitada para a sua conta.`
+        : rawMessage;
 
       showToast({
         type: 'error',
         text1: 'Erro ao solicitar saque',
-        text2: apiError.message
+        text2: helpMessage
       });
     } finally {
       setIsSubmitting(false);
     }
-  }, [apiOptions, definition.passkeyLabel, displayLabel, payload, recipientId, refetch, secretKey, showToast, validate]);
-
-
+  }, [
+    apiOptions,
+    definition.passkeyLabel,
+    displayLabel,
+    pixKey,
+    refetch,
+    secretKey,
+    selectedType,
+    validate,
+    withdrawValue,
+    showToast
+  ]);
 
   const handleHistoryPress = useCallback(() => {
     navigation.navigate('WithdrawHistory');
@@ -218,7 +243,7 @@ const FinanceScreen: React.FC = ({ navigation }: any) => {
         showsVerticalScrollIndicator={false}
       >
         <Card style={styles.balanceCard}>
-          <Text style={[styles.balanceLabel, { color: theme.colors.textMuted }]}>Saldo disponível</Text>
+          <Text style={[styles.balanceLabel, { color: theme.colors.textMuted }]}>Saldo disponivel</Text>
           {isLoading ? (
             <ActivityIndicator size="small" color={theme.colors.primary} />
           ) : (
@@ -278,35 +303,31 @@ const FinanceScreen: React.FC = ({ navigation }: any) => {
             onChangeText={handleAmountChange}
           />
 
-          <View style={styles.infoBox}>
+          <View
+            style={[
+              styles.infoBox,
+              { backgroundColor: theme.isDark ? `${theme.colors.primary}24` : 'rgba(6, 168, 82, 0.12)' }
+            ]}
+          >
             <Text style={[styles.infoText, { color: theme.colors.textSecondary }]}>
-              Valor líquido após taxa de intermediação {formatCurrencyBRL(netBeforeReserveTotal)}
+              Taxa de saque: {formatCurrencyBRL(withdrawFee)}
             </Text>
             <Text style={[styles.infoText, { color: theme.colors.textSecondary }]}>
-              Reserva financeira ({(RESERVE_PERCENTAGE * 100).toFixed(2)}%) retida {formatCurrencyBRL(reserveHoldTotal)}
-            </Text>
-            <Text style={[styles.infoText, { color: theme.colors.textSecondary }]}>
-              Saldo disponível (após reserva) {formatCurrencyBRL(available)}
-            </Text>
-            <Text style={[styles.infoText, { color: theme.colors.textSecondary }]}>
-              Taxa de saque {formatCurrencyBRL(withdrawFee)}
-            </Text>
-            <Text style={[styles.infoText, { color: theme.colors.textSecondary }]}>
-              Saldo líquido após taxa de saque {formatCurrencyBRL(Math.max(0, available - withdrawFee))}
+              Por politica operacional, somente valores superiores a taxa de saque podem ser solicitados.
             </Text>
           </View>
 
-            <PrimaryButton
-              label="Solicitar saque"
-              onPress={handleSubmit}
-              loading={isSubmitting}
-              disabled={isSubmitting || isLoading}
-            />
+          <PrimaryButton
+            label="Solicitar saque"
+            onPress={handleSubmit}
+            loading={isSubmitting}
+            disabled={isSubmitting || isLoading}
+          />
         </Card>
 
         <TouchableOpacity style={styles.historyLink} onPress={handleHistoryPress}>
           <Text style={[styles.historyText, { color: theme.colors.primary }]}>
-            Ver histórico de saques
+            Ver historico de saques
           </Text>
         </TouchableOpacity>
       </ScrollView>
@@ -361,7 +382,6 @@ const styles = StyleSheet.create({
     fontWeight: '600'
   },
   infoBox: {
-    backgroundColor: 'rgba(6, 168, 82, 0.08)',
     padding: 14,
     borderRadius: 16,
     gap: 6

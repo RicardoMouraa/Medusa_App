@@ -20,13 +20,15 @@ type OrderListItemProps = {
 
 const OrderListItem: React.FC<OrderListItemProps> = ({ order, onPress }) => {
   const { theme } = usePreferences();
+  const iconBackground = theme.isDark ? `${theme.colors.primary}24` : 'rgba(6, 168, 82, 0.08)';
+  const methodPillBackground = theme.isDark ? theme.colors.surfaceAlt : 'rgba(12, 13, 16, 0.08)';
 
   return (
     <TouchableOpacity onPress={() => onPress?.(order)} activeOpacity={0.85}>
       <Card style={styles.card}>
         <View style={styles.header}>
           <View style={styles.titleRow}>
-            <View style={styles.iconWrapper}>
+            <View style={[styles.iconWrapper, { backgroundColor: iconBackground }]}>
               <Ionicons name="receipt-outline" size={20} color={theme.colors.primary} />
             </View>
             <View>
@@ -48,7 +50,7 @@ const OrderListItem: React.FC<OrderListItemProps> = ({ order, onPress }) => {
             </Text>
           </View>
           {order.paymentMethod ? (
-            <View style={styles.methodPill}>
+            <View style={[styles.methodPill, { backgroundColor: methodPillBackground }]}>
               <Text style={[styles.methodText, { color: theme.colors.textMuted }]}>
                 {order.paymentMethod}
               </Text>
@@ -81,8 +83,7 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 20,
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(6, 168, 82, 0.08)'
+    justifyContent: 'center'
   },
   title: {
     fontSize: 16,
@@ -104,8 +105,7 @@ const styles = StyleSheet.create({
   methodPill: {
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: 'rgba(12, 13, 16, 0.08)'
+    borderRadius: 16
   },
   methodText: {
     fontSize: 12,

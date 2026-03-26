@@ -130,7 +130,7 @@ const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({ route, navigati
                   {formatCurrencyBRL(feeSummary.reserveHold)}
                 </Text>
               </View>
-              <View style={[styles.feeRow, styles.feeHighlight]}>
+              <View style={[styles.feeRow, styles.feeHighlight, { borderColor: theme.colors.border }]}>
                 <Text style={[styles.feeLabel, { color: theme.colors.text }]}>{NET_LABEL}</Text>
                 <Text style={[styles.feeValue, { color: theme.colors.text }]}>{formatCurrencyBRL(feeSummary.net)}</Text>
               </View>
@@ -160,7 +160,7 @@ const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({ route, navigati
             <Card style={styles.card}>
               <SectionTitle title="Itens" />
               {data.items.map((item) => (
-                <View key={item.id} style={styles.itemRow}>
+                <View key={item.id} style={[styles.itemRow, { borderColor: theme.colors.border }]}>
                   <View>
                     <Text style={[styles.itemTitle, { color: theme.colors.text }]}>{item.name}</Text>
                     <Text style={[styles.textMuted, { color: theme.colors.textSecondary }]}>
@@ -180,7 +180,7 @@ const OrderDetailsScreen: React.FC<OrderDetailsScreenProps> = ({ route, navigati
               <SectionTitle title="Linha do tempo" />
               {data.timeline.map((event) => (
                 <View key={`${event.status}-${event.createdAt}`} style={styles.timelineItem}>
-                  <View style={styles.timelineIndicator} />
+                  <View style={[styles.timelineIndicator, { backgroundColor: theme.colors.primary }]} />
                   <View style={styles.timelineContent}>
                     <Text style={[styles.itemTitle, { color: theme.colors.text }]}>{event.label}</Text>
                     <Text style={[styles.textMuted, { color: theme.colors.textSecondary }]}>
@@ -259,8 +259,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(0,0,0,0.08)'
+    borderBottomWidth: StyleSheet.hairlineWidth
   },
   itemTitle: {
     fontSize: 15,
@@ -279,7 +278,6 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#06A852',
     marginTop: 6
   },
   timelineContent: {
@@ -302,8 +300,7 @@ const styles = StyleSheet.create({
   feeHighlight: {
     marginTop: 4,
     paddingTop: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(0,0,0,0.08)'
+    borderTopWidth: StyleSheet.hairlineWidth
   }
 });
 

@@ -14,11 +14,12 @@ type WithdrawHistoryItemProps = {
 
 const WithdrawHistoryListItem: React.FC<WithdrawHistoryItemProps> = ({ item }) => {
   const { theme } = usePreferences();
+  const iconBackground = theme.isDark ? `${theme.colors.primary}24` : 'rgba(6, 168, 82, 0.08)';
 
   return (
     <Card style={styles.card}>
       <View style={styles.row}>
-        <View style={styles.iconWrapper}>
+        <View style={[styles.iconWrapper, { backgroundColor: iconBackground }]}>
           <Ionicons name="swap-vertical-outline" size={20} color={theme.colors.primary} />
         </View>
         <View style={styles.details}>
@@ -52,8 +53,7 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 20,
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(6, 168, 82, 0.08)'
+    justifyContent: 'center'
   },
   details: {
     flex: 1

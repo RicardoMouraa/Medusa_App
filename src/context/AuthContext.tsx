@@ -177,12 +177,19 @@ const readSessionSnapshot = async (): Promise<SessionSnapshot | null> => {
   }
 };
 
-const writeSessionSnapshot = async (uid: string): Promise<SessionSnapshot> => {
+const writeSessionSnapshot = async (
+  uid: string,
+  expiresAtOverride?: string
+): Promise<SessionSnapshot> => {
   const now = Date.now();
+  const parsedOverride = expiresAtOverride ? new Date(expiresAtOverride).getTime() : NaN;
+  const expiresAt = Number.isFinite(parsedOverride)
+    ? new Date(parsedOverride).toISOString()
+    : new Date(now + SESSION_TTL_MS).toISOString();
   const snapshot: SessionSnapshot = {
     uid,
     createdAt: new Date(now).toISOString(),
-    expiresAt: new Date(now + SESSION_TTL_MS).toISOString()
+    expiresAt
   };
   try {
     await AsyncStorage.setItem(STORAGE_KEYS.session, JSON.stringify(snapshot));
@@ -298,7 +305,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
         hasAttemptedAutoSignInRef.current = true;
         lastKnownUidRef.current = firebaseUser.uid;
         const snapshot = await readSessionSnapshot();
-        if (snapshot && isSessionExpired(snapshot, firebaseUser.uid)) {
+        if (snapshot?.uid === firebaseUser.uid && isSessionExpired(snapshot, firebaseUser.uid)) {
           await clearSessionSnapshot();
           await clearAuthSession();
           await firebaseSignOut(auth);
@@ -308,13 +315,11 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
           return;
         }
 
-        const nextSnapshot = await writeSessionSnapshot(firebaseUser.uid);
-        const savedAuthSession = await readAuthSession();
-        if (savedAuthSession && savedAuthSession.uid === firebaseUser.uid) {
-          await writeAuthSession({
-            ...savedAuthSession,
-            expiresAt: nextSnapshot.expiresAt
-          });
+        if (!snapshot || snapshot.uid !== firebaseUser.uid) {
+          const savedAuthSession = await readAuthSession();
+          const expiresAtFromStoredSession =
+            savedAuthSession?.uid === firebaseUser.uid ? savedAuthSession.expiresAt : undefined;
+          await writeSessionSnapshot(firebaseUser.uid, expiresAtFromStoredSession);
         }
 
         setIsProfileReady(false);

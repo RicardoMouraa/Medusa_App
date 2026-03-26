@@ -14,24 +14,6 @@ import { useToast } from '@/hooks/useToast';
 import { useDashboard, getAvailableDashboards } from '@/hooks/useDashboard';
 import type { DashboardId } from '@/types/dashboard';
 import { useAuth } from '@/context/AuthContext';
-import { sendExpoPushTestNotificationAsync, sendLocalNotification } from '@/services/notifications';
-import type { NotificationType } from '@/utils/notifications';
-
-type LocalTestScenario = {
-  type: NotificationType;
-  paymentMethod: 'cartao' | 'pix' | 'boleto';
-  customer: string;
-};
-
-const LOCAL_TEST_SCENARIOS: LocalTestScenario[] = [
-  { type: 'sale', paymentMethod: 'cartao', customer: 'Cliente cartao' },
-  { type: 'sale', paymentMethod: 'pix', customer: 'Cliente pix' },
-  { type: 'sale', paymentMethod: 'boleto', customer: 'Cliente boleto' },
-  { type: 'pix_generated', paymentMethod: 'pix', customer: 'Cliente pix' },
-  { type: 'boleto_generated', paymentMethod: 'boleto', customer: 'Cliente boleto' }
-];
-
-const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 const SettingsScreen: React.FC = () => {
   const {
@@ -47,13 +29,10 @@ const SettingsScreen: React.FC = () => {
   } = usePreferences();
   const navigation = useNavigation<any>();
   const { profile } = useAuth();
-  const { definition, selectedDashboardId, displayLabel } = useDashboard();
+  const { selectedDashboardId, displayLabel } = useDashboard();
   const { showToast } = useToast();
   const dashboards = useMemo(() => getAvailableDashboards(), []);
   const dashboardAliases: Partial<Record<DashboardId, string>> = preferences.dashboardAliases ?? {};
-  const activeTemplateModel = preferences.notifications.models.creative ? 'creative' : 'default';
-
-  const randomTestAmount = useCallback(() => Number((Math.random() * 800 + 20).toFixed(2)), []);
 
   const handleThemeToggle = useCallback(
     (value: boolean) => {
@@ -65,10 +44,7 @@ const SettingsScreen: React.FC = () => {
   const handleNotificationModelToggle = useCallback(
     (model: 'default' | 'creative') => {
       const models = preferences.notifications.models;
-      if (
-        models[model] &&
-        Object.entries(models).filter(([, enabled]) => enabled).length === 1
-      ) {
+      if (models[model] && Object.entries(models).filter(([, enabled]) => enabled).length === 1) {
         showToast({
           type: 'info',
           text1: 'Mantenha pelo menos um modelo ativo'
@@ -104,7 +80,7 @@ const SettingsScreen: React.FC = () => {
     await refreshFromServer();
     showToast({
       type: 'success',
-      text1: 'Preferências sincronizadas'
+      text1: 'Preferencias sincronizadas'
     });
   }, [refreshFromServer, showToast]);
 
@@ -119,78 +95,12 @@ const SettingsScreen: React.FC = () => {
     });
   }, [refreshPushToken, showToast]);
 
-  const handlePushTest = useCallback(async () => {
-    const token = preferences.expoPushToken ?? (await refreshPushToken());
-    if (!token) {
-      showToast({
-        type: 'info',
-        text1: 'Token de push indisponivel',
-        text2: 'Valide as permissoes de notificacao no dispositivo.'
-      });
-      return;
-    }
-
-    try {
-      await sendExpoPushTestNotificationAsync(token, {
-        type: 'sale',
-        amount: randomTestAmount(),
-        templateKey: activeTemplateModel
-      });
-      showToast({
-        type: 'success',
-        text1: 'Push de teste enviado',
-        text2: 'Confira se a notificacao chegou no aparelho.'
-      });
-    } catch (error) {
-      showToast({
-        type: 'error',
-        text1: 'Falha ao enviar push de teste',
-        text2: error instanceof Error ? error.message : undefined
-      });
-    }
-  }, [activeTemplateModel, preferences.expoPushToken, randomTestAmount, refreshPushToken, showToast]);
-
-  const handleLocalPushSuiteTest = useCallback(
-    async (model: 'default' | 'creative') => {
-      try {
-        for (const scenario of LOCAL_TEST_SCENARIOS) {
-          await sendLocalNotification(
-            scenario.type,
-            {
-              amount: randomTestAmount(),
-              customer: scenario.customer,
-              paymentMethod: scenario.paymentMethod
-            },
-            {
-              templateKey: model,
-              bypassTypeFilter: true
-            }
-          );
-          await wait(120);
-        }
-
-        showToast({
-          type: 'success',
-          text1: `Teste completo (${model === 'creative' ? 'criativo' : 'padrao'}) enviado`,
-          text2: 'Geramos notificacoes para cartao, pix, boleto, pix gerado e boleto gerado.'
-        });
-      } catch (error) {
-        showToast({
-          type: 'error',
-          text1: 'Falha ao gerar notificacoes de teste',
-          text2: error instanceof Error ? error.message : undefined
-        });
-      }
-    },
-    [randomTestAmount, showToast]
-  );
-
   return (
-    <View style={styles.container}>
-      <MedusaHeader title="Configurações" subtitle={displayLabel} />
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <MedusaHeader title="Configuracoes" subtitle={displayLabel} />
       <ScrollView contentContainerStyle={styles.content}>
         <Card style={styles.section}>
-          <SectionTitle title="Notificações" />
+          <SectionTitle title="Notificacoes" />
           <ToggleRow
             label="Saques e Plataformas"
             value={preferences.notifications.withdraws}
@@ -208,7 +118,7 @@ const SettingsScreen: React.FC = () => {
           />
           <ToggleRow
             label="Som"
-            description="Ativar efeitos sonoros nas notificações."
+            description="Ativar efeitos sonoros nas notificacoes."
             value={preferences.notifications.sound}
             onValueChange={() => toggleNotification('sound')}
           />
@@ -216,16 +126,16 @@ const SettingsScreen: React.FC = () => {
 
         <Card style={styles.section}>
           <SectionTitle
-            title="Modelos de notificação"
-            caption="Padrão = objetivo | Criativa = linguagem descontraída"
+            title="Modelos de notificacao"
+            caption="Padrao = objetivo | Criativa = linguagem descontraida"
           />
           <ToggleRow
-            label="Notificação padrão"
+            label="Notificacao padrao"
             value={preferences.notifications.models.default}
             onValueChange={() => handleNotificationModelToggle('default')}
           />
           <ToggleRow
-            label="Notificação criativa"
+            label="Notificacao criativa"
             value={preferences.notifications.models.creative}
             onValueChange={() => handleNotificationModelToggle('creative')}
           />
@@ -234,15 +144,15 @@ const SettingsScreen: React.FC = () => {
         <Card style={styles.section}>
           <SectionTitle title="Idioma" />
           <View style={styles.staticRow}>
-            <Text style={styles.staticLabel}>Português (pt-BR)</Text>
-            <Text style={styles.staticCaption}>
-              Outras línguas chegam em breve.
+            <Text style={[styles.staticLabel, { color: theme.colors.text }]}>Portugues (pt-BR)</Text>
+            <Text style={[styles.staticCaption, { color: theme.colors.textSecondary }]}>
+              Outras linguas chegam em breve.
             </Text>
           </View>
         </Card>
 
         <Card style={styles.section}>
-          <SectionTitle title="Visualização" />
+          <SectionTitle title="Visualizacao" />
           <ToggleRow
             label="Light"
             description="Desative para usar o tema escuro."
@@ -250,7 +160,6 @@ const SettingsScreen: React.FC = () => {
             onValueChange={handleThemeToggle}
           />
         </Card>
-
 
         <Card style={styles.section}>
           <SectionTitle title="Dashboards" caption="Selecione qual API deseja visualizar" />
@@ -267,7 +176,7 @@ const SettingsScreen: React.FC = () => {
                     styles.dashboardRow,
                     {
                       borderColor: isActive ? theme.colors.primary : theme.colors.border,
-                      backgroundColor: isActive ? 'rgba(5,166,96,0.08)' : 'transparent'
+                      backgroundColor: isActive ? `${theme.colors.primary}1A` : 'transparent'
                     }
                   ]}
                   onPress={() => handleDashboardSelect(dashboard.id as DashboardId, dashboard.passkeyField)}
@@ -307,21 +216,6 @@ const SettingsScreen: React.FC = () => {
 
         <PrimaryButton label="Sincronizar com o painel" onPress={handleForceSync} variant="outline" />
         <PrimaryButton label="Atualizar push notifications" onPress={handlePushRegistration} variant="outline" />
-        <PrimaryButton label="Enviar push de teste (Expo)" onPress={handlePushTest} variant="outline" />
-        <PrimaryButton
-          label="Rodar teste completo (padrao)"
-          onPress={() => {
-            void handleLocalPushSuiteTest('default');
-          }}
-          variant="outline"
-        />
-        <PrimaryButton
-          label="Rodar teste completo (criativa)"
-          onPress={() => {
-            void handleLocalPushSuiteTest('creative');
-          }}
-          variant="outline"
-        />
       </ScrollView>
     </View>
   );
@@ -348,8 +242,7 @@ const styles = StyleSheet.create({
     fontWeight: '600'
   },
   staticCaption: {
-    fontSize: 13,
-    color: '#7A7A7A'
+    fontSize: 13
   },
   dashboardGroup: {
     marginTop: 12,
@@ -385,4 +278,3 @@ const styles = StyleSheet.create({
 });
 
 export default SettingsScreen;
-

@@ -27,7 +27,6 @@ import { getBalance, getTransactions } from '@/services/medusaApi';
 import { useDashboard } from '@/hooks/useDashboard';
 import { DashboardSummary, OrderSummary, PeriodFilter as PeriodFilterValue } from '@/types/api';
 import { formatCurrencyBRL, formatPercentage } from '@/utils/format';
-import { sumPaidNetAmount } from '@/utils/finance';
 import { format, subDays, differenceInCalendarDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -87,6 +86,8 @@ const PERIOD_TO_DAYS: Record<Exclude<PeriodFilterValue, 'custom'>, number | 'tod
   '90d': 90,
   '1y': 365
 };
+
+const BALANCE_REFRESH_INTERVAL_MS = 15000;
 
 const resolveRange = (
   period: PeriodFilterValue,
@@ -169,7 +170,6 @@ const HomeScreen: React.FC = ({ navigation }: any) => {
 
     const range = resolveRange(period, customRange);
     const paidTransactions = transactions.filter((transaction) => transaction.status === 'paid');
-    const availableFromTransactions = sumPaidNetAmount(paidTransactions);
     const filtered = paidTransactions.filter((transaction) => isWithinRange(transaction.createdAt, range));
     const baseDays = range ? Math.max(0, differenceInCalendarDays(range.end, range.start)) : 6;
     const daysSpan = paidTransactions.length === 0 ? Math.max(6, baseDays) : baseDays;
@@ -189,7 +189,7 @@ const HomeScreen: React.FC = ({ navigation }: any) => {
 
     return {
       currency: balance.currency,
-      availableBalance: availableFromTransactions,
+      availableBalance: balance.available ?? 0,
       pendingBalance: balance.pending ?? 0,
       totalPaidAmount,
       paidOrdersCount,
@@ -199,13 +199,43 @@ const HomeScreen: React.FC = ({ navigation }: any) => {
     } satisfies DashboardData;
   }, [apiOptions, customRange, definition.passkeyLabel, displayLabel, period, recipientId, secretKey]);
 
-  const { data, isLoading, error, refetch } = useApiRequest<DashboardData>(fetchDashboard, [fetchDashboard]);
+  const { data, isLoading, error, refetch, setData } = useApiRequest<DashboardData>(
+    fetchDashboard,
+    [fetchDashboard]
+  );
 
   useFocusEffect(
     useCallback(() => {
       void refetch();
     }, [refetch])
   );
+
+  useEffect(() => {
+    if (!secretKey) return;
+
+    const syncBalance = async () => {
+      try {
+        const latestBalance = await getBalance(secretKey, { recipientId }, apiOptions);
+        setData((current) => {
+          if (!current) return current;
+          return {
+            ...current,
+            availableBalance: latestBalance.available ?? 0,
+            pendingBalance: latestBalance.pending ?? 0,
+            currency: latestBalance.currency || current.currency
+          };
+        });
+      } catch (pollError) {
+        console.warn('[Home] Failed to refresh balance', pollError);
+      }
+    };
+
+    const interval = setInterval(() => {
+      void syncBalance();
+    }, BALANCE_REFRESH_INTERVAL_MS);
+
+    return () => clearInterval(interval);
+  }, [apiOptions, recipientId, secretKey, setData]);
 
   const handleFinanceShortcut = useCallback(() => {
     navigation.navigate('FinanceTab');

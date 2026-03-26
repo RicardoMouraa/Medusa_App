@@ -17,7 +17,11 @@ const Card: React.FC<CardProps> = ({ variant = 'default', style, padded = true, 
     <View
       style={[
         styles.container,
-        { backgroundColor, shadowColor: theme.colors.shadow },
+        {
+          backgroundColor,
+          shadowColor: theme.colors.shadow,
+          borderColor: theme.colors.border
+        },
         padded && styles.padded,
         style
       ]}
@@ -30,7 +34,6 @@ const styles = StyleSheet.create({
   container: {
     borderRadius: 20,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(12, 20, 33, 0.04)',
     shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 0.08,
     shadowRadius: 16,

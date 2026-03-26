@@ -43,6 +43,7 @@ type RequestOptions = {
   method?: string;
   body?: unknown;
   query?: QueryParams;
+  headers?: Record<string, string>;
 };
 
 type ClientOptions = {
@@ -307,13 +308,26 @@ const mapFees = (transaction: MedusaTransaction): FeeEntry[] => {
     .filter((fee): fee is FeeEntry => Boolean(fee));
 };
 
-const mapTransactionToOrder = (transaction: MedusaTransaction): OrderDetail => {
-  const amount = fromMedusaMoney(
-    transaction.paidAmount ??
-      transaction.amount ??
+const resolveOrderAmount = (transaction: MedusaTransaction) => {
+  const grossAmount = fromMedusaMoney(
+    transaction.amount ??
       transaction.amount_cents ??
       (transaction as Record<string, unknown>).amountInCents
   );
+  const paidAmount = fromMedusaMoney(transaction.paidAmount);
+  const normalizedStatus = (transaction.status ?? '').toLowerCase();
+
+  // For pending/canceled flows we prefer the order total amount, not paid amount (often zero).
+  const candidates =
+    normalizedStatus === 'paid' || normalizedStatus === 'partially_paid'
+      ? [paidAmount, grossAmount]
+      : [grossAmount, paidAmount];
+
+  return candidates.find((value) => Number.isFinite(value) && value > 0) ?? 0;
+};
+
+const mapTransactionToOrder = (transaction: MedusaTransaction): OrderDetail => {
+  const amount = resolveOrderAmount(transaction);
 
   const createdAt =
     transaction.createdAt ??
@@ -390,6 +404,9 @@ const request = async <T>(
     Authorization: buildAuthHeader(secretKey),
     Accept: 'application/json'
   };
+  if (options?.headers) {
+    Object.assign(headers, options.headers);
+  }
 
   let body: string | undefined;
   if (options?.body) {
@@ -559,8 +576,15 @@ const normalizePixKeyType = (value?: string) => {
   if (normalized.includes('cnpj')) return 'cnpj';
   if (normalized.includes('email')) return 'email';
   if (normalized.includes('telefone') || normalized.includes('phone')) return 'phone';
-  if (normalized.includes('aleat')) return 'random';
-  if (normalized.includes('qr')) return 'qr_code';
+  if (normalized.includes('evp') || normalized.includes('aleat') || normalized.includes('random')) return 'evp';
+  if (
+    normalized.includes('qr') ||
+    normalized.includes('copy') ||
+    normalized.includes('copia') ||
+    normalized.includes('copypaste')
+  ) {
+    return 'copypaste';
+  }
   return normalized;
 };
 
@@ -568,22 +592,29 @@ export const createTransfer = async (
   secretKey: string,
   payload: {
     amount: number;
+    method?: 'fiat' | 'crypto';
     pixKey?: string;
     pixKeyType?: string;
-    recipientId?: number;
+    netPayout?: boolean;
     postbackUrl?: string;
   },
   options?: ClientOptions
 ) => {
+  const bodyPayload: Record<string, unknown> = {
+    method: payload.method ?? 'fiat',
+    amount: payload.amount,
+    netPayout: payload.netPayout ?? false,
+    postbackUrl: payload.postbackUrl
+  };
+
+  if (bodyPayload.method === 'fiat') {
+    bodyPayload.pixKey = payload.pixKey;
+    bodyPayload.pixKeyType = normalizePixKeyType(payload.pixKeyType);
+  }
+
   return request<Record<string, unknown>>('/transfers', secretKey, {
     method: 'POST',
-    body: {
-      amount: payload.amount,
-      pixKey: payload.pixKey,
-      pixKeyType: normalizePixKeyType(payload.pixKeyType),
-      recipientId: payload.recipientId,
-      postbackUrl: payload.postbackUrl
-    },
+    body: bodyPayload,
     baseUrl: options?.baseUrl
   });
 };

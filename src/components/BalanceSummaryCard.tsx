@@ -3,6 +3,7 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import Card from '@/components/Card';
+import { usePreferences } from '@/context/PreferencesContext';
 import { formatCurrencyBRL } from '@/utils/format';
 
 type BalanceSummaryCardProps = {
@@ -15,53 +16,62 @@ type BalanceSummaryCardProps = {
 const BalanceSummaryCard: React.FC<BalanceSummaryCardProps> = ({
   available,
   pending,
-  currency = 'BRL',
   onWithdrawPress
-}) => (
-  <Card style={styles.container}>
-    <View style={styles.header}>
-      <Text style={styles.subtitle}>Saldo disponível</Text>
-      <Text style={styles.value}>{formatCurrencyBRL(available)}</Text>
-    </View>
-    <View style={styles.row}>
-      <View>
-        <Text style={styles.caption}>Pendente</Text>
-        <Text style={styles.pending}>{formatCurrencyBRL(pending)}</Text>
+}) => {
+  const { theme } = usePreferences();
+
+  const cardBackgroundColor = theme.isDark ? theme.colors.card : '#D8F6D0';
+  const subtitleColor = theme.isDark ? theme.colors.textMuted : '#06421B';
+  const valueColor = theme.isDark ? theme.colors.text : '#032B0B';
+  const captionColor = theme.isDark ? theme.colors.textSecondary : '#06421B';
+  const pendingColor = theme.isDark ? theme.colors.text : '#032B0B';
+
+  return (
+    <Card style={[styles.container, { backgroundColor: cardBackgroundColor }]}>
+      <View style={styles.header}>
+        <Text style={[styles.subtitle, { color: subtitleColor }]}>Saldo disponivel</Text>
+        <Text style={[styles.value, { color: valueColor }]}>{formatCurrencyBRL(available)}</Text>
       </View>
-      <TouchableOpacity style={styles.button} onPress={onWithdrawPress} activeOpacity={0.85}>
-        <Text style={styles.buttonLabel}>Saque agora</Text>
-        <Ionicons name="chevron-forward" size={18} color="#FFFFFF" />
-      </TouchableOpacity>
-    </View>
-  </Card>
-);
+      <View style={styles.row}>
+        <View>
+          <Text style={[styles.caption, { color: captionColor }]}>Pendente</Text>
+          <Text style={[styles.pending, { color: pendingColor }]}>{formatCurrencyBRL(pending)}</Text>
+        </View>
+        <TouchableOpacity
+          style={[styles.button, { backgroundColor: theme.colors.primary }]}
+          onPress={onWithdrawPress}
+          activeOpacity={0.85}
+        >
+          <Text style={[styles.buttonLabel, { color: theme.colors.headerTint }]}>Saque agora</Text>
+          <Ionicons name="chevron-forward" size={18} color={theme.colors.headerTint} />
+        </TouchableOpacity>
+      </View>
+    </Card>
+  );
+};
 
 const styles = StyleSheet.create({
   container: {
     padding: 22,
     gap: 20,
     borderRadius: 24,
-    overflow: 'hidden',
-    backgroundColor: '#D8F6D0'
+    overflow: 'hidden'
   },
   header: {
     gap: 6
   },
   subtitle: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#032B0B'
+    fontWeight: '600'
   },
   value: {
     fontSize: 32,
     fontWeight: '800',
-    letterSpacing: -0.5,
-    color: '#032B0B'
+    letterSpacing: -0.5
   },
   caption: {
     fontSize: 13,
-    fontWeight: '500',
-    color: '#06421B'
+    fontWeight: '500'
   },
   row: {
     flexDirection: 'row',
@@ -70,21 +80,18 @@ const styles = StyleSheet.create({
   },
   pending: {
     fontSize: 18,
-    fontWeight: '700',
-    color: '#032B0B'
+    fontWeight: '700'
   },
   button: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#05A660',
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 30,
     gap: 6
   },
   buttonLabel: {
-    color: '#FFFFFF',
     fontWeight: '700',
     fontSize: 14
   }

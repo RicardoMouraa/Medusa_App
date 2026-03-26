@@ -103,6 +103,8 @@ const ProfileScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
     () => maskSecretKey(profile?.secondarySecretKey),
     [profile?.secondarySecretKey]
   );
+  const heroCardBackground = theme.isDark ? `${theme.colors.primary}26` : 'rgba(5, 166, 96, 0.08)';
+  const secretPillBackground = theme.isDark ? theme.colors.surfaceAlt : '#FFFFFF';
 
   const handlePasswordReset = useCallback(async () => {
     if (!profile?.email) {
@@ -162,17 +164,17 @@ const ProfileScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
       </SafeAreaView>
 
       <ScrollView contentContainerStyle={styles.content}>
-        <Card style={[styles.card, styles.heroCard]}>
+        <Card style={[styles.card, styles.heroCard, { backgroundColor: heroCardBackground }]}>
           <View style={styles.heroHeader}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{initials}</Text>
+            <View style={[styles.avatar, { backgroundColor: theme.colors.primary }]}>
+              <Text style={[styles.avatarText, { color: theme.colors.headerTint }]}>{initials}</Text>
             </View>
             <View style={styles.heroInfo}>
               <Text style={[styles.heroName, { color: theme.colors.text }]}>{profile?.name ?? 'Usuário'}</Text>
               <Text style={[styles.heroEmail, { color: theme.colors.textSecondary }]}>{profile?.email ?? '---'}</Text>
-              <View style={styles.secretPill}>
-                <Text style={styles.secretLabel}>{definition.passkeyLabel}</Text>
-                <Text style={styles.secretValue}>{maskedSecretKeyActive}</Text>
+              <View style={[styles.secretPill, { backgroundColor: secretPillBackground }]}>
+                <Text style={[styles.secretLabel, { color: theme.colors.textMuted }]}>{definition.passkeyLabel}</Text>
+                <Text style={[styles.secretValue, { color: theme.colors.primary }]}>{maskedSecretKeyActive}</Text>
               </View>
             </View>
           </View>
@@ -284,8 +286,7 @@ const styles = StyleSheet.create({
     gap: 12
   },
   heroCard: {
-    gap: 16,
-    backgroundColor: 'rgba(5, 166, 96, 0.08)'
+    gap: 16
   },
   heroHeader: {
     flexDirection: 'row',
@@ -297,11 +298,9 @@ const styles = StyleSheet.create({
     height: 64,
     borderRadius: 32,
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#05A660'
+    justifyContent: 'center'
   },
   avatarText: {
-    color: '#FFFFFF',
     fontSize: 22,
     fontWeight: '800'
   },
@@ -321,19 +320,16 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: '#FFFFFF'
+    borderRadius: 16
   },
   secretLabel: {
     fontSize: 11,
-    color: '#7A8A80',
     textTransform: 'uppercase',
     fontWeight: '700'
   },
   secretValue: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#05A660'
+    fontWeight: '700'
   },
   sectionTitle: {
     fontSize: 16,
