@@ -456,6 +456,9 @@ export const getBalance = async (
   const available = pickMoney(
     payload,
     [
+      'amount',
+      'data.amount',
+      'balance.amount',
       'available',
       'available.amount',
       'balance.available',
@@ -479,10 +482,42 @@ export const getBalance = async (
     ['waiting', 'pending', 'aguardando']
   );
 
+  const reserve = pickMoney(
+    payload,
+    ['reserve', 'balance.reserve', 'data.reserve'],
+    ['reserve', 'reserva']
+  );
+
+  const maxAntecipable = pickMoney(
+    payload,
+    [
+      'maxAntecipable',
+      'max_antecipable',
+      'maxAnticipable',
+      'max_anticipable',
+      'balance.maxAntecipable',
+      'data.maxAntecipable'
+    ],
+    ['antecip', 'anticip']
+  );
+
   const blocked = pickMoney(
     payload,
     ['blocked', 'balance.blocked', 'data.blocked'],
     ['blocked', 'bloqueado']
+  );
+
+  const withdrawAvailableFromApi = pickMoney(
+    payload,
+    [
+      'withdrawAvailable',
+      'withdraw_available',
+      'availableForWithdraw',
+      'available_for_withdraw',
+      'balance.withdrawAvailable',
+      'data.withdrawAvailable'
+    ],
+    ['withdraw_available', 'disponivel_saque', 'saque_disponivel']
   );
 
   const withdrawFee = pickMoney(
@@ -503,9 +538,17 @@ export const getBalance = async (
     ['minimum', 'minimo']
   );
 
+  const withdrawAvailable =
+    withdrawAvailableFromApi > 0
+      ? withdrawAvailableFromApi
+      : Math.max(0, available - (reserve > 0 ? reserve : 0));
+
   return {
     available,
+    withdrawAvailable,
     pending,
+    reserve,
+    maxAntecipable,
     blocked,
     currency:
       (payload.currency as string) ??

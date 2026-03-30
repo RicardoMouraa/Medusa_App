@@ -82,6 +82,7 @@ const FinanceScreen: React.FC = ({ navigation }: any) => {
   const withdrawFee =
     financeData?.withdrawFee && financeData.withdrawFee > 0 ? financeData.withdrawFee : 10;
   const available = financeData?.available ?? 0;
+  const withdrawAvailable = financeData?.withdrawAvailable ?? available;
   const pending = financeData?.pending ?? 0;
   const minimumWithdrawRequired = useMemo(
     () => Math.max(withdrawFee, financeData?.minimumWithdraw ?? 0),
@@ -132,7 +133,7 @@ const FinanceScreen: React.FC = ({ navigation }: any) => {
       return false;
     }
 
-    if (amount > available) {
+    if (amount > withdrawAvailable) {
       showToast({
         type: 'error',
         text1: 'Saldo insuficiente',
@@ -142,7 +143,7 @@ const FinanceScreen: React.FC = ({ navigation }: any) => {
     }
 
     return true;
-  }, [available, minimumWithdrawRequired, pixKey, showToast, withdrawFee, withdrawValue]);
+  }, [minimumWithdrawRequired, pixKey, showToast, withdrawAvailable, withdrawFee, withdrawValue]);
 
   const handleSubmit = useCallback(async () => {
     if (!validate()) return;
@@ -251,6 +252,9 @@ const FinanceScreen: React.FC = ({ navigation }: any) => {
               {formatCurrencyBRL(available)}
             </Text>
           )}
+          <Text style={[styles.balanceCaption, { color: theme.colors.textSecondary }]}>
+            Disponivel para saque {formatCurrencyBRL(withdrawAvailable)}
+          </Text>
           <Text style={[styles.balanceCaption, { color: theme.colors.textSecondary }]}>
             Saldo pendente {formatCurrencyBRL(pending)}
           </Text>

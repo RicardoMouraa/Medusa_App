@@ -190,6 +190,7 @@ const HomeScreen: React.FC = ({ navigation }: any) => {
     return {
       currency: balance.currency,
       availableBalance: balance.available ?? 0,
+      withdrawAvailableBalance: balance.withdrawAvailable ?? balance.available ?? 0,
       pendingBalance: balance.pending ?? 0,
       totalPaidAmount,
       paidOrdersCount,
@@ -221,6 +222,7 @@ const HomeScreen: React.FC = ({ navigation }: any) => {
           return {
             ...current,
             availableBalance: latestBalance.available ?? 0,
+            withdrawAvailableBalance: latestBalance.withdrawAvailable ?? latestBalance.available ?? 0,
             pendingBalance: latestBalance.pending ?? 0,
             currency: latestBalance.currency || current.currency
           };
@@ -288,6 +290,7 @@ const HomeScreen: React.FC = ({ navigation }: any) => {
           <>
             <BalanceSummaryCard
               available={data.availableBalance}
+              withdrawAvailable={data.withdrawAvailableBalance}
               pending={data.pendingBalance}
               currency={data.currency}
               onWithdrawPress={handleFinanceShortcut}

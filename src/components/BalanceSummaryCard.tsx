@@ -8,6 +8,7 @@ import { formatCurrencyBRL } from '@/utils/format';
 
 type BalanceSummaryCardProps = {
   available: number;
+  withdrawAvailable?: number;
   pending: number;
   currency?: string;
   onWithdrawPress?: () => void;
@@ -15,10 +16,12 @@ type BalanceSummaryCardProps = {
 
 const BalanceSummaryCard: React.FC<BalanceSummaryCardProps> = ({
   available,
+  withdrawAvailable,
   pending,
   onWithdrawPress
 }) => {
   const { theme } = usePreferences();
+  const availableForWithdraw = withdrawAvailable ?? available;
 
   const cardBackgroundColor = theme.isDark ? theme.colors.card : '#D8F6D0';
   const subtitleColor = theme.isDark ? theme.colors.textMuted : '#06421B';
@@ -34,8 +37,11 @@ const BalanceSummaryCard: React.FC<BalanceSummaryCardProps> = ({
       </View>
       <View style={styles.row}>
         <View>
-          <Text style={[styles.caption, { color: captionColor }]}>Pendente</Text>
-          <Text style={[styles.pending, { color: pendingColor }]}>{formatCurrencyBRL(pending)}</Text>
+          <Text style={[styles.caption, { color: captionColor }]}>Disponivel para saque</Text>
+          <Text style={[styles.pending, { color: pendingColor }]}>{formatCurrencyBRL(availableForWithdraw)}</Text>
+          <Text style={[styles.pendingCaption, { color: theme.colors.textSecondary }]}>
+            Pendente {formatCurrencyBRL(pending)}
+          </Text>
         </View>
         <TouchableOpacity
           style={[styles.button, { backgroundColor: theme.colors.primary }]}
@@ -81,6 +87,11 @@ const styles = StyleSheet.create({
   pending: {
     fontSize: 18,
     fontWeight: '700'
+  },
+  pendingCaption: {
+    marginTop: 4,
+    fontSize: 12,
+    fontWeight: '500'
   },
   button: {
     flexDirection: 'row',

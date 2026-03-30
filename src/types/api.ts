@@ -22,6 +22,7 @@ export interface AuthResponse {
 
 export interface DashboardSummary {
   availableBalance: number;
+  withdrawAvailableBalance: number;
   pendingBalance: number;
   currency: string;
   totalPaidAmount: number;
@@ -69,7 +70,10 @@ export interface OrderDetail extends OrderSummary {
 
 export interface BalanceResponse {
   available: number;
+  withdrawAvailable: number;
   pending: number;
+  reserve?: number;
+  maxAntecipable?: number;
   blocked?: number;
   currency: string;
   withdrawFee: number;
