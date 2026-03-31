@@ -1,4 +1,4 @@
-import 'dotenv/config';
+﻿import 'dotenv/config';
 import { ConfigContext, ExpoConfig } from 'expo/config';
 
 const packageVersion =
@@ -41,8 +41,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     buildNumber: '1',
     infoPlist: {
       CFBundleDisplayName: 'Medusa Pay',
+      ITSAppUsesNonExemptEncryption: false,
       NSUserNotificationUsageDescription:
-        'Usamos notificações para alertar sobre vendas, saques e eventos do painel MedusaPay.'
+        'Usamos notificaÃ§Ãµes para alertar sobre vendas, saques e eventos do painel MedusaPay.'
     }
   },
 
@@ -63,7 +64,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
 
   notification: {
-    icon: './assets/icon-notificação-0.png',
+    icon: './assets/icon-notificaÃ§Ã£o-0.png',
     color: '#06A852'
   },
 
@@ -78,11 +79,12 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     [
       'expo-notifications',
       {
-        icon: './assets/icon-notificação-0.png',
+        icon: './assets/icon-notificaÃ§Ã£o-0.png',
         color: '#06A852',
         defaultChannel: 'default'
       }
     ]
   ]
 });
+
 
