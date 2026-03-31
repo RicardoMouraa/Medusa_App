@@ -41,9 +41,9 @@ import {
 import { STORAGE_KEYS } from '@/constants/storageKeys';
 
 type FirestoreUserDoc = {
-  uid: string;
-  name: string;
-  email: string;
+  uid?: string;
+  name?: string;
+  email?: string;
   secretKey?: string | null;
   secondarySecretKey?: string | null;
   phone?: string | null;
@@ -109,10 +109,14 @@ const normalizeTimestamp = (value?: Timestamp | string | null) => {
   return value;
 };
 
-const normalizeProfile = (data: FirestoreUserDoc): AuthUserProfile => ({
-  uid: data.uid,
-  name: data.name,
-  email: data.email,
+const normalizeProfile = (
+  uid: string,
+  data: FirestoreUserDoc,
+  fallbackEmail?: string | null
+): AuthUserProfile => ({
+  uid,
+  name: fallbackName(data.name),
+  email: data.email ?? fallbackEmail ?? '',
   secretKey: null,
   secondarySecretKey: null,
   phone: data.phone ?? null,
@@ -121,8 +125,11 @@ const normalizeProfile = (data: FirestoreUserDoc): AuthUserProfile => ({
   updatedAt: normalizeTimestamp(data.updatedAt)
 });
 
-const applyStoredPasskeys = async (profile: AuthUserProfile): Promise<AuthUserProfile> => {
-  const stored = await readPasskeys(profile.uid);
+const applyStoredPasskeys = async (
+  uid: string,
+  profile: AuthUserProfile
+): Promise<AuthUserProfile> => {
+  const stored = await readPasskeys(uid);
   return {
     ...profile,
     secretKey: stored?.secretKey ?? null,
@@ -244,12 +251,34 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     }
 
     const data = snapshot.data() as FirestoreUserDoc;
+    const patch: Record<string, unknown> = {};
+    if (data.uid !== uid) {
+      patch.uid = uid;
+    }
+    if (!data.name || !data.name.trim()) {
+      patch.name = fallbackName(auth.currentUser?.displayName);
+    }
+    if (!data.email || !data.email.trim()) {
+      patch.email = auth.currentUser?.email ?? '';
+    }
+
+    if (Object.keys(patch).length > 0) {
+      await setDoc(
+        ref,
+        {
+          ...patch,
+          updatedAt: serverTimestamp()
+        },
+        { merge: true }
+      );
+    }
+
     if (data.secretKey || data.secondarySecretKey) {
       await scrubLegacySecretKeys(ref, data);
     }
 
-    const normalized = normalizeProfile(data);
-    return applyStoredPasskeys(normalized);
+    const normalized = normalizeProfile(uid, data, auth.currentUser?.email);
+    return applyStoredPasskeys(uid, normalized);
   }, []);
 
   const ensureUserDocument = useCallback(
