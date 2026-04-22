@@ -50,6 +50,22 @@ type ClientOptions = {
   baseUrl?: string;
 };
 
+const getClientIp = async (): Promise<string | undefined> => {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3000);
+    const response = await fetch('https://api.ipify.org?format=json', {
+      signal: controller.signal,
+      headers: { Accept: 'application/json' }
+    });
+    clearTimeout(timeout);
+    const data = (await response.json()) as { ip?: string };
+    return typeof data.ip === 'string' ? data.ip : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
 const normalizeBaseUrl = (baseUrl?: string) => {
   const target = baseUrl ?? BASE_URL;
   return target.endsWith('/') ? target.slice(0, -1) : target;
@@ -387,6 +403,20 @@ const handleErrorResponse = async (response: Response): Promise<ApiError> => {
     message = 'Token invalido (RL-2). Verifique sua Secret Key e tente novamente.';
   }
 
+  const lowerMessage = message.toLowerCase();
+  if (
+    lowerMessage.includes('ip') &&
+    (lowerMessage.includes('autori') ||
+      lowerMessage.includes('block') ||
+      lowerMessage.includes('whitelist') ||
+      lowerMessage.includes('requer') ||
+      lowerMessage.includes('obrigat') ||
+      lowerMessage.includes('required'))
+  ) {
+    message =
+      'IP nao autorizado pela API. Acesse o painel Medusa Pay > Configuracoes > Credenciais de API e desative a restricao de IP para permitir chamadas do aplicativo.';
+  }
+
   return {
     message,
     status,
@@ -643,11 +673,14 @@ export const createTransfer = async (
   },
   options?: ClientOptions
 ) => {
+  const clientIp = await getClientIp();
+
   const bodyPayload: Record<string, unknown> = {
     method: payload.method ?? 'fiat',
     amount: payload.amount,
     netPayout: payload.netPayout ?? false,
-    postbackUrl: payload.postbackUrl
+    ...(payload.postbackUrl ? { postbackUrl: payload.postbackUrl } : {}),
+    ...(clientIp ? { ip: clientIp } : {})
   };
 
   if (bodyPayload.method === 'fiat') {

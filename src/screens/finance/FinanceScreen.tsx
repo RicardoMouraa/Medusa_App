@@ -188,9 +188,20 @@ const FinanceScreen: React.FC = ({ navigation }: any) => {
     } catch (err) {
       const apiError = err as ApiError;
       const rawMessage = apiError?.message ?? 'Nao foi possivel solicitar o saque.';
-      const helpMessage = rawMessage.toLowerCase().includes('withdraw')
-        ? `${rawMessage} Verifique no painel da Medusa se a funcionalidade de saque via API esta habilitada para a sua conta.`
-        : rawMessage;
+      const lower = rawMessage.toLowerCase();
+      const isIpError =
+        lower.includes('ip') &&
+        (lower.includes('autori') ||
+          lower.includes('block') ||
+          lower.includes('whitelist') ||
+          lower.includes('requer') ||
+          lower.includes('obrigat') ||
+          lower.includes('required'));
+      const helpMessage = isIpError
+        ? 'IP nao autorizado. Acesse o painel Medusa Pay > Configuracoes > API e desative a restricao de IP.'
+        : lower.includes('withdraw')
+          ? `${rawMessage} Verifique no painel da Medusa se a funcionalidade de saque via API esta habilitada para a sua conta.`
+          : rawMessage;
 
       showToast({
         type: 'error',
